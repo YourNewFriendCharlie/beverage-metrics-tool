@@ -1,3 +1,846 @@
+<button onClick={saveRecipe} disabled={isSubmitting} style={{...styles.button, fontSize: '0.875rem', padding: '12px 20px'}}>
+            💾 {editingRecipe ? 'Update Recipe' : 'Save Recipe'}
+          </button>
+          <button onClick={exportRecipe} disabled={!calculations} style={{...styles.buttonSecondary, ...styles.button, fontSize: '0.875rem'}}>
+            📥 Export
+          </button>
+        </div >
+      </div >
+
+      <div style={{...styles.message, ...styles.messageInfo, marginBottom: '24px'}}>
+        🔄 <strong>Auto Unit Conversion:</strong> Mix units freely! Use 30ml gin + 1oz vermouth + 2cl olive brine - the app handles all conversions automatically.
+      </div>
+
+      <div style={{...styles.grid, ...styles.gridCols2, marginBottom: '32px'}}>
+        <input
+          value={recipeName}
+          onChange={(e) => setRecipeName(e.target.value)}
+          placeholder="Recipe Name (e.g., Classic Martini, House Margarita)"
+          style={styles.input}
+        />
+        
+        <select
+          value={recipeCategory}
+          onChange={(e) => setRecipeCategory(e.target.value)}
+          style={styles.input}
+        >
+          {Object.keys(CATEGORY_TARGETS).map(cat => <option key={cat} value={cat}>{cat}</option>)}
+        </select>
+      </div>
+
+      <textarea
+        value={instructions}
+        onChange={(e) => setInstructions(e.target.value)}
+        placeholder="Step-by-step preparation instructions..."
+        rows={3}
+        style={{...styles.input, marginBottom: '32px', resize: 'vertical'}}
+      />
+
+      <div style={{marginBottom: '32px'}}>
+        <h3 style={{marginBottom: '16px', fontWeight: '600'}}>Recipe Ingredients</h3>
+        {selectedItems.map((item, index) => {
+          const ingredient = ingredients.find(i => i.id === item.ingredient_id);
+          const showConversion = ingredient && item.unit && ingredient.purchase_unit_type !== item.unit;
+          
+          return (
+            <div key={index} style={{marginBottom: '12px'}}>
+              <div style={{display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: '12px', alignItems: 'center', padding: '16px', background: 'rgba(249, 250, 251, 0.5)', borderRadius: '12px'}}>
+                <select
+                  value={item.ingredient_id}
+                  onChange={e => handleChange(index, 'ingredient_id', e.target.value)}
+                  style={{...styles.input, margin: 0, padding: '12px'}}
+                >
+                  <option value="">Select Ingredient</option>
+                  {ingredients.map(ing => (
+                    <option key={ing.id} value={ing.id}>{ing.name} ({ing.category}) - {ing.purchase_unit_type}</option>
+                  ))}
+                </select>
+                
+                <input
+                  type="number"
+                  step="0.1"
+                  value={item.amount_used}
+                  onChange={e => handleChange(index, 'amount_used', e.target.value)}
+                  placeholder="Amount"
+                  style={{...styles.input, margin: 0, padding: '12px'}}
+                />
+                
+                <select
+                  value={item.unit}
+                  onChange={e => handleChange(index, 'unit', e.target.value)}
+                  style={{...styles.input, margin: 0, padding: '12px'}}
+                >
+                  <option value="ml">ml</option>
+                  <option value="oz">oz</option>
+                  <option value="l">l</option>
+                  <option value="cl">cl</option>
+                  <option value="g">g</option>
+                  <option value="kg">kg</option>
+                  <option value="unit">unit</option>
+                </select>
+                
+                {selectedItems.length > 1 && (
+                  <button
+                    onClick={() => removeIngredient(index)}
+                    style={{padding: '8px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer'}}
+                  >
+                    🗑️
+                  </button>
+                )}
+              </div>
+              
+              {showConversion && item.amount_used && (
+                <div style={{marginTop: '8px', padding: '12px', background: 'rgba(59, 130, 246, 0.1)', borderRadius: '8px', fontSize: '0.875rem', color: '#1d4ed8'}}>
+                  💡 Auto-converting: {ingredient.purchase_unit_type} → {item.unit} | Cost: ฿{getUnitCostInTargetUnit(ingredient, item.unit).toFixed(4)} per {item.unit}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <div style={{display: 'flex', flexWrap: 'wrap', gap: '16px', marginBottom: '32px'}}>
+        <button onClick={addIngredient} style={{...styles.buttonSecondary, ...styles.button, fontSize: '0.875rem'}}>
+          ➕ Add Ingredient
+        </button>
+        
+        <button onClick={calculateCost} style={{...styles.button, fontSize: '0.875rem'}}>
+          🧮 Calculate Cost & Pricing
+        </button>
+        
+        <button onClick={() => setShowBatchTool(!showBatchTool)} style={{...styles.button, background: 'linear-gradient(135deg, #9333ea, #ec4899)', fontSize: '0.875rem'}}>
+          📊 Batch Tool
+        </button>
+      </div>
+
+{
+  showBatchTool && calculations && (
+    <div style={{ background: 'linear-gradient(135deg, rgba(147, 51, 234, 0.1), rgba(236, 72, 153, 0.1))', border: '1px solid rgba(147, 51, 234, 0.2)', borderRadius: '16px', padding: '24px', marginBottom: '32px' }}>
+      <h3 style={{ marginTop: 0, marginBottom: '16px', color: '#7c3aed', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px' }}>
+        📊 Batch Scaling Tool
+      </h3>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
+        <label style={{ fontSize: '0.875rem', fontWeight: '600', color: '#7c3aed' }}>Batch Size:</label>
+        <input
+          type="number"
+          value={batchSize}
+          onChange={(e) => setBatchSize(parseInt(e.target.value) || 1)}
+          style={{ ...styles.input, width: '80px', margin: 0, padding: '8px 12px' }}
+          min="1"
+        />
+        <span style={{ fontSize: '0.875rem', color: '#7c3aed', fontWeight: '500' }}>servings</span>
+      </div>
+      <div style={{ ...styles.grid, ...styles.gridCols3 }}>
+        <div style={{ background: 'rgba(255, 255, 255, 0.6)', padding: '16px', borderRadius: '12px' }}>
+          <div style={{ fontWeight: 'bold', color: '#7c3aed', fontSize: '0.875rem' }}>Batch Total Cost</div>
+          <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#374151' }}>฿{(parseFloat(calculations.totalCost) * batchSize).toFixed(2)}</div>
+        </div>
+        <div style={{ background: 'rgba(255, 255, 255, 0.6)', padding: '16px', borderRadius: '12px' }}>
+          <div style={{ fontWeight: 'bold', color: '#7c3aed', fontSize: '0.875rem' }}>Revenue Potential</div>
+          <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#10b981' }}>฿{(parseFloat(calculations.suggestedPrice) * batchSize).toFixed(2)}</div>
+        </div>
+        <div style={{ background: 'rgba(255, 255, 255, 0.6)', padding: '16px', borderRadius: '12px' }}>
+          <div style={{ fontWeight: 'bold', color: '#7c3aed', fontSize: '0.875rem' }}>Batch Profit</div>
+          <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#2563eb' }}>฿{((parseFloat(calculations.suggestedPrice) - parseFloat(calculations.totalCost)) * batchSize).toFixed(2)}</div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+{
+  calculations && (
+    <div style={{ background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(16, 185, 129, 0.1))', border: '1px solid rgba(59, 130, 246, 0.2)', borderRadius: '24px', padding: '32px', backdropFilter: 'blur(8px)' }}>
+      <h3 style={{ fontSize: '1.5rem', fontWeight: 'bold', background: 'linear-gradient(135deg, #2563eb, #9333ea)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <MartiniIcon size={28} />
+        Cost Analysis & Pricing Suggestions
+      </h3>
+
+      <div style={{ ...styles.grid, gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '24px', marginBottom: '32px' }}>
+        <div style={{ background: 'rgba(255, 255, 255, 0.7)', padding: '24px', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.2)', textAlign: 'center', transition: 'transform 0.3s ease' }}>
+          <div style={{ fontSize: '2rem', fontWeight: 'bold', color: '#ef4444', marginBottom: '8px' }}>฿{calculations.totalCost}</div>
+          <div style={{ fontSize: '0.875rem', fontWeight: '600', color: '#6b7280' }}>Total Cost</div>
+        </div>
+
+        <div style={{ background: 'rgba(255, 255, 255, 0.7)', padding: '24px', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.2)', textAlign: 'center', transition: 'transform 0.3s ease' }}>
+          <div style={{ fontSize: '2rem', fontWeight: 'bold', color: '#10b981', marginBottom: '8px' }}>฿{calculations.suggestedPrice}</div>
+          <div style={{ fontSize: '0.875rem', fontWeight: '600', color: '#6b7280' }}>Suggested Price</div>
+        </div>
+
+        <div style={{ background: 'rgba(255, 255, 255, 0.7)', padding: '24px', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.2)', textAlign: 'center', transition: 'transform 0.3s ease' }}>
+          <div style={{ fontSize: '2rem', fontWeight: 'bold', color: '#2563eb', marginBottom: '8px' }}>{calculations.margin}%</div>
+          <div style={{ fontSize: '0.875rem', fontWeight: '600', color: '#6b7280' }}>Gross Margin</div>
+        </div>
+
+        <div style={{ background: 'rgba(255, 255, 255, 0.7)', padding: '24px', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.2)', textAlign: 'center', transition: 'transform 0.3s ease' }}>
+          <div style={{ fontSize: '2rem', fontWeight: 'bold', color: '#9333ea', marginBottom: '8px' }}>{calculations.minPourCost}%</div>
+          <div style={{ fontSize: '0.875rem', fontWeight: '600', color: '#6b7280' }}>Pour Cost @Target</div>
+        </div>
+      </div>
+
+      {/* Ingredient Breakdown */}
+      <div style={{ background: 'rgba(255, 255, 255, 0.7)', padding: '24px', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.2)', marginBottom: '24px' }}>
+        <h4 style={{ fontWeight: 'bold', marginBottom: '16px', fontSize: '1.125rem', color: '#374151', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          🧾 Ingredient Cost Breakdown
+        </h4>
+        {calculations.ingredientBreakdown.map((item, index) => (
+          <div key={index} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', background: 'rgba(249, 250, 251, 0.5)', borderRadius: '8px', marginBottom: '8px' }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: '600', color: '#374151' }}>{item.name}</div>
+              <div style={{ fontSize: '0.875rem', color: '#6b7280' }}>{item.amount} {item.unit} @ ฿{item.unitCost}/{item.unit.split(' ')[0]}</div>
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ fontWeight: 'bold', color: '#10b981' }}>฿{item.cost}</div>
+              <div style={{ fontSize: '0.875rem', color: '#6b7280' }}>{item.percentage}%</div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ background: 'rgba(255, 255, 255, 0.7)', padding: '24px', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.2)' }}>
+        <h4 style={{ fontWeight: 'bold', marginBottom: '16px', fontSize: '1.125rem', color: '#374151', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          📊 Pricing Range Analysis ({recipeCategory})
+        </h4>
+        <div style={{ fontSize: '0.875rem', color: '#4b5563', lineHeight: '1.6' }}>
+          <div style={{ marginBottom: '8px' }}><strong>Industry Target Pour Cost:</strong> {(CATEGORY_TARGETS[recipeCategory].pourCostMin * 100).toFixed(0)}% - {(CATEGORY_TARGETS[recipeCategory].pourCostMax * 100).toFixed(0)}%</div>
+          <div style={{ marginBottom: '8px' }}><strong>Price Range:</strong> ฿{calculations.minPrice} - ฿{calculations.maxPrice}</div>
+          <div><strong>Recommended:</strong> ฿{calculations.suggestedPrice} (Pour cost: {calculations.minPourCost}%)</div>
+        </div>
+      </div>
+    </div>
+  )
+}
+    </div >
+  );
+}
+
+function IngredientsList({ ingredients, onRefresh }) {
+  const [filter, setFilter] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('All');
+
+  const filteredIngredients = ingredients.filter(ingredient => {
+    const matchesName = ingredient.name.toLowerCase().includes(filter.toLowerCase());
+    const matchesCategory = categoryFilter === 'All' || ingredient.category === categoryFilter;
+    return matchesName && matchesCategory;
+  });
+
+  const categories = ['All', ...Object.keys(CATEGORY_TARGETS)];
+
+  const exportIngredients = () => {
+    const exportData = filteredIngredients.map(ing => ({
+      name: ing.name,
+      category: ing.category,
+      quantity: ing.purchase_unit_qty,
+      unit: ing.purchase_unit_type,
+      price: ing.purchase_price,
+      costPerUnit: (ing.purchase_price / ing.purchase_unit_qty).toFixed(4),
+      tags: ing.tags ? ing.tags.join(', ') : ''
+    }));
+
+    exportToCSV(exportData, 'ingredients_inventory.csv');
+  };
+
+  return (
+    <div style={{ ...styles.card, maxWidth: '1200px' }}>
+      <div style={styles.cardHeader}>
+        <div style={{ ...styles.logo, background: 'linear-gradient(135deg, #9333ea, #ec4899)' }}>
+          <MartiniIcon size={28} />
+        </div>
+        <div style={{ flex: 1 }}>
+          <h2 style={{ ...styles.cardTitle, background: 'linear-gradient(135deg, #9333ea, #ec4899)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+            Ingredient Inventory
+          </h2>
+          <p style={styles.cardSubtitle}>Manage your beverage ingredients • MargaritaHotSauceLLC</p>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <span style={{ fontSize: '0.875rem', fontWeight: '600', color: '#6b7280', background: '#f3f4f6', padding: '8px 16px', borderRadius: '9999px' }}>
+            {filteredIngredients.length} ingredients
+          </span>
+          <button onClick={exportIngredients} style={{ ...styles.button, background: 'linear-gradient(135deg, #10b981, #059669)', fontSize: '0.875rem', padding: '12px 20px' }}>
+            📥 Export CSV
+          </button>
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', gap: '24px', marginBottom: '32px' }}>
+        <div style={{ position: 'relative', flex: 1 }}>
+          <span style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: '#9ca3af' }}>🔍</span>
+          <input
+            type="text"
+            placeholder="Search ingredients..."
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            style={{ ...styles.input, paddingLeft: '48px' }}
+          />
+        </div>
+        <select
+          value={categoryFilter}
+          onChange={(e) => setCategoryFilter(e.target.value)}
+          style={{ ...styles.input, minWidth: '192px' }}
+        >
+          {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+        </select>
+      </div>
+
+      <div style={{ ...styles.grid, gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '24px' }}>
+        {filteredIngredients.map(ingredient => (
+          <div key={ingredient.id} style={{ ...styles.ingredientCard, cursor: 'pointer' }} onMouseEnter={(e) => e.target.style.transform = 'scale(1.02)'} onMouseLeave={(e) => e.target.style.transform = 'scale(1)'}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
+              <h3 style={{ fontWeight: 'bold', color: '#374151', fontSize: '1.125rem', margin: 0, flex: 1 }}>{ingredient.name}</h3>
+              <span style={{
+                ...styles.badge,
+                background: ingredient.category === 'Spirit' ? 'linear-gradient(135deg, #ef4444, #dc2626)' :
+                  ingredient.category === 'Classic Cocktails' ? 'linear-gradient(135deg, #f59e0b, #ea580c)' :
+                    ingredient.category === 'House Cocktails' ? 'linear-gradient(135deg, #9333ea, #7c3aed)' :
+                      ingredient.category === 'Wine' ? 'linear-gradient(135deg, #9333ea, #ec4899)' :
+                        ingredient.category === 'Beer' ? 'linear-gradient(135deg, #f59e0b, #d97706)' :
+                          ingredient.category === 'Coffee' ? 'linear-gradient(135deg, #d97706, #92400e)' :
+                            'linear-gradient(135deg, #2563eb, #1d4ed8)'
+              }}>
+                {ingredient.category}
+              </span>
+            </div>
+
+            <div style={{ fontSize: '0.875rem', color: '#6b7280', lineHeight: '1.5' }}>
+              <div style={{ background: 'rgba(249, 250, 251, 0.5)', padding: '12px', borderRadius: '12px', marginBottom: '12px' }}>
+                <div style={{ fontWeight: '500' }}>฿{ingredient.purchase_price} per {ingredient.purchase_unit_qty}{ingredient.purchase_unit_type}</div>
+              </div>
+              <div style={{ fontWeight: 'bold', color: '#10b981', background: 'rgba(16, 185, 129, 0.1)', padding: '12px', borderRadius: '12px' }}>
+                ฿{(ingredient.purchase_price / ingredient.purchase_unit_qty).toFixed(4)} per {ingredient.purchase_unit_type}
+              </div>
+
+              {/* Show common unit conversions */}
+              <div style={{ marginTop: '12px', padding: '12px', background: 'rgba(59, 130, 246, 0.1)', borderRadius: '12px' }}>
+                <div style={{ fontWeight: '600', color: '#1d4ed8', marginBottom: '8px' }}>Smart Conversions:</div>
+                {UNIT_CONVERSIONS[ingredient.purchase_unit_type]?.type === 'volume' && (
+                  <div style={{ fontSize: '0.75rem', color: '#1d4ed8' }}>
+                    ml: ฿{getUnitCostInTargetUnit(ingredient, 'ml').toFixed(4)} |
+                    oz: ฿{getUnitCostInTargetUnit(ingredient, 'oz').toFixed(4)} |
+                    cl: ฿{getUnitCostInTargetUnit(ingredient, 'cl').toFixed(4)}
+                  </div>
+                )}
+              </div>
+
+              {ingredient.tags && ingredient.tags.length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '12px' }}>
+                  {ingredient.tags.map((tag, index) => (
+                    <span key={index} style={{
+                      background: 'linear-gradient(135deg, #e5e7eb, #d1d5db)',
+                      color: '#374151',
+                      padding: '4px 12px',
+                      borderRadius: '9999px',
+                      fontSize: '0.75rem',
+                      fontWeight: '500'
+                    }}>
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {filteredIngredients.length === 0 && (
+        <div style={{ textAlign: 'center', padding: '64px 0', color: '#6b7280' }}>
+          <MartiniIcon size={64} />
+          <p style={{ fontSize: '1.25rem', fontWeight: '500', margin: '24px 0 8px' }}>No ingredients found matching your search.</p>
+          <p style={{ fontSize: '0.875rem', margin: 0 }}>Try adjusting your search terms or category filter.</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Recipe Detail Modal Component
+function RecipeDetailModal({ recipe, ingredients, onClose, onEdit, onDelete }) {
+  const [recipeIngredients, setRecipeIngredients] = useState([]);
+  const [calculations, setCalculations] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  useEffect(() => {
+    const fetchRecipeIngredients = async () => {
+      if (!recipe) return;
+
+      try {
+        const { data, error } = await supabase
+          .from('recipe_ingredients')
+          .select('*')
+          .eq('recipe_id', recipe.id);
+
+        if (error) throw error;
+        setRecipeIngredients(data || []);
+      } catch (err) {
+        console.error('Error fetching recipe ingredients:', err);
+      }
+    };
+
+    fetchRecipeIngredients();
+  }, [recipe]);
+
+  // Calculate costs when ingredients are loaded
+  useEffect(() => {
+    if (recipeIngredients.length > 0 && ingredients.length > 0) {
+      calculateRecipeCost();
+    }
+  }, [recipeIngredients, ingredients]);
+
+  const calculateRecipeCost = () => {
+    let totalCost = 0;
+    let ingredientBreakdown = [];
+
+    recipeIngredients.forEach(ri => {
+      const ingredient = ingredients.find(i => i.id === ri.ingredient_id);
+      if (!ingredient) return;
+
+      const unitCostInRecipeUnit = getUnitCostInTargetUnit(ingredient, ri.unit_type);
+      const itemCost = ri.amount_used * unitCostInRecipeUnit;
+      totalCost += itemCost;
+
+      ingredientBreakdown.push({
+        name: ingredient.name,
+        amount: ri.amount_used,
+        unit: ri.unit_type,
+        cost: itemCost.toFixed(2),
+        unitCost: unitCostInRecipeUnit.toFixed(4)
+      });
+    });
+
+    const targets = CATEGORY_TARGETS[recipe.category];
+    const suggestedPrice = totalCost * targets.markup;
+    const margin = ((suggestedPrice - totalCost) / suggestedPrice * 100);
+    const pourCost = (totalCost / suggestedPrice * 100);
+
+    setCalculations({
+      totalCost: totalCost.toFixed(2),
+      suggestedPrice: suggestedPrice.toFixed(2),
+      margin: margin.toFixed(1),
+      pourCost: pourCost.toFixed(1),
+      ingredientBreakdown
+    });
+  };
+
+  const handleDelete = async () => {
+    if (!window.confirm(`Are you sure you want to delete "${recipe.name}"? This action cannot be undone.`)) {
+      return;
+    }
+
+    setIsDeleting(true);
+    try {
+      // Delete recipe ingredients first
+      await supabase
+        .from('recipe_ingredients')
+        .delete()
+        .eq('recipe_id', recipe.id);
+
+      // Then delete the recipe
+      const { error } = await supabase
+        .from('recipes')
+        .delete()
+        .eq('id', recipe.id);
+
+      if (error) throw error;
+
+      alert('🗑️ Recipe deleted successfully!');
+      onDelete();
+      onClose();
+    } catch (error) {
+      alert(`❌ Error deleting recipe: ${error.message}`);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  if (!recipe) return null;
+
+  return (
+    <div style={styles.modal}>
+      <div style={styles.modalContent}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px' }}>
+          <div style={{ flex: 1 }}>
+            <h2 style={{ ...styles.cardTitle, fontSize: '2rem', marginBottom: '8px' }}>{recipe.name}</h2>
+            <div style={{ display: 'flex', gap: '12px', alignItems: 'center', marginBottom: '16px' }}>
+              <span style={{
+                ...styles.badge,
+                background: recipe.category === 'Spirit' ? 'linear-gradient(135deg, #ef4444, #dc2626)' :
+                  recipe.category === 'Classic Cocktails' ? 'linear-gradient(135deg, #f59e0b, #ea580c)' :
+                    recipe.category === 'House Cocktails' ? 'linear-gradient(135deg, #9333ea, #7c3aed)' :
+                      'linear-gradient(135deg, #2563eb, #1d4ed8)'
+              }}>
+                {recipe.category}
+              </span>
+              <span style={{ fontSize: '0.875rem', color: '#6b7280' }}>
+                Created: {new Date(recipe.created_at).toLocaleDateString()}
+              </span>
+            </div>
+          </div>
+          <button onClick={onClose} style={{ ...styles.buttonSecondary, ...styles.buttonSmall, padding: '8px' }}>
+            ❌
+          </button>
+        </div>
+
+        {recipe.instructions && (
+          <div style={{ marginBottom: '24px' }}>
+            <h3 style={{ fontWeight: '600', marginBottom: '12px' }}>Instructions:</h3>
+            <div style={{ background: 'rgba(249, 250, 251, 0.5)', padding: '16px', borderRadius: '12px', fontStyle: 'italic' }}>
+              {recipe.instructions}
+            </div>
+          </div>
+        )}
+
+        <div style={{ marginBottom: '24px' }}>
+          <h3 style={{ fontWeight: '600', marginBottom: '12px' }}>Ingredients:</h3>
+          {recipeIngredients.map((ri, index) => {
+            const ingredient = ingredients.find(i => i.id === ri.ingredient_id);
+            return (
+              <div key={index} style={{ display: 'flex', justifyContent: 'space-between', padding: '12px', background: 'rgba(249, 250, 251, 0.5)', borderRadius: '8px', marginBottom: '8px' }}>
+                <span>{ingredient?.name || 'Unknown ingredient'}</span>
+                <span style={{ fontWeight: '600' }}>{ri.amount_used} {ri.unit_type}</span>
+              </div>
+            );
+          })}
+        </div>
+
+        {calculations && (
+          <div style={{ background: 'rgba(59, 130, 246, 0.1)', padding: '20px', borderRadius: '16px', marginBottom: '24px' }}>
+            <h3 style={{ fontWeight: '600', marginBottom: '16px', color: '#1d4ed8' }}>Cost Analysis:</h3>
+            <div style={{ ...styles.grid, ...styles.gridCols2, gap: '16px' }}>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#ef4444' }}>฿{calculations.totalCost}</div>
+                <div style={{ fontSize: '0.875rem', color: '#6b7280' }}>Total Cost</div>
+              </div>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#10b981' }}>฿{calculations.suggestedPrice}</div>
+                <div style={{ fontSize: '0.875rem', color: '#6b7280' }}>Suggested Price</div>
+              </div>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#2563eb' }}>{calculations.margin}%</div>
+                <div style={{ fontSize: '0.875rem', color: '#6b7280' }}>Margin</div>
+              </div>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#9333ea' }}>{calculations.pourCost}%</div>
+                <div style={{ fontSize: '0.875rem', color: '#6b7280' }}>Pour Cost</div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+          <button
+            onClick={handleDelete}
+            disabled={isDeleting}
+            style={{
+              ...styles.button,
+              background: 'linear-gradient(135deg, #ef4444, #dc2626)',
+              fontSize: '0.875rem',
+              ...(isDeleting && { background: '#9ca3af', cursor: 'not-allowed' })
+            }}
+          >
+            {isDeleting ? '🔄 Deleting...' : '🗑️ Delete Recipe'}
+          </button>
+          <button onClick={() => onEdit(recipe)} style={{ ...styles.button, fontSize: '0.875rem' }}>
+            ✏️ Edit Recipe
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SavedRecipes({ recipes, ingredients, onRecipeUpdated }) {
+  const [filter, setFilter] = useState('');
+  const [selectedRecipe, setSelectedRecipe] = useState(null);
+  const [editingRecipe, setEditingRecipe] = useState(null);
+
+  const filteredRecipes = recipes.filter(recipe =>
+    recipe.name.toLowerCase().includes(filter.toLowerCase())
+  );
+
+  const exportRecipes = () => {
+    const exportData = filteredRecipes.map(recipe => ({
+      name: recipe.name,
+      category: recipe.category,
+      instructions: recipe.instructions || '',
+      tags: recipe.tags ? recipe.tags.join(', ') : '',
+      created: new Date(recipe.created_at).toLocaleDateString()
+    }));
+
+    exportToCSV(exportData, 'saved_recipes.csv');
+  };
+
+  const handleRecipeClick = async (recipe) => {
+    try {
+      // Fetch recipe with ingredients
+      const { data: recipeIngredients, error } = await supabase
+        .from('recipe_ingredients')
+        .select('*')
+        .eq('recipe_id', recipe.id);
+
+      if (error) throw error;
+
+      setSelectedRecipe({
+        ...recipe,
+        recipe_ingredients: recipeIngredients || []
+      });
+    } catch (err) {
+      console.error('Error fetching recipe details:', err);
+      alert('Error loading recipe details');
+    }
+  };
+
+  const handleEdit = (recipe) => {
+    setSelectedRecipe(null);
+    setEditingRecipe({
+      ...recipe,
+      recipe_ingredients: recipe.recipe_ingredients || []
+    });
+  };
+
+  const handleCancelEdit = () => {
+    setEditingRecipe(null);
+  };
+
+  const handleRecipeUpdated = () => {
+    setEditingRecipe(null);
+    setSelectedRecipe(null);
+    if (onRecipeUpdated) onRecipeUpdated();
+  };
+
+  const handleRecipeDeleted = () => {
+    setSelectedRecipe(null);
+    if (onRecipeUpdated) onRecipeUpdated();
+  };
+
+  // If editing, show the recipe builder
+  if (editingRecipe) {
+    return (
+      <RecipeBuilder
+        ingredients={ingredients}
+        onRecipeSaved={handleRecipeUpdated}
+        editingRecipe={editingRecipe}
+        onCancelEdit={handleCancelEdit}
+      />
+    );
+  }
+
+  return (
+    <>
+      <div style={{ ...styles.card, maxWidth: '1200px' }}>
+        <div style={styles.cardHeader}>
+          <div style={{ ...styles.logo, background: 'linear-gradient(135deg, #ea580c, #dc2626)' }}>
+            <MartiniIcon size={28} />
+          </div>
+          <div style={{ flex: 1 }}>
+            <h2 style={{ ...styles.cardTitle, background: 'linear-gradient(135deg, #ea580c, #dc2626)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+              Saved Recipes
+            </h2>
+            <p style={styles.cardSubtitle}>Your beverage recipe collection • MargaritaHotSauceLLC</p>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <span style={{ fontSize: '0.875rem', fontWeight: '600', color: '#6b7280', background: '#f3f4f6', padding: '8px 16px', borderRadius: '9999px' }}>
+              {filteredRecipes.length} recipes
+            </span>
+            <button onClick={exportRecipes} style={{ ...styles.button, background: 'linear-gradient(135deg, #ea580c, #dc2626)', fontSize: '0.875rem', padding: '12px 20px' }}>
+              📥 Export CSV
+            </button>
+          </div>
+        </div>
+
+        <div style={{ ...styles.message, ...styles.messageInfo, marginBottom: '32px' }}>
+          👆 <strong>Click any recipe</strong> to view details, cost analysis, and editing options. Smart unit conversions included!
+        </div>
+
+        <div style={{ marginBottom: '32px' }}>
+          <div style={{ position: 'relative' }}>
+            <span style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: '#9ca3af' }}>🔍</span>
+            <input
+              type="text"
+              placeholder="Search recipes..."
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+              style={{ ...styles.input, paddingLeft: '48px' }}
+            />
+          </div>
+        </div>
+
+        <div style={{ ...styles.grid, gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: '24px' }}>
+          {filteredRecipes.map(recipe => (
+            <div
+              key={recipe.id}
+              style={{
+                ...styles.ingredientCard,
+                cursor: 'pointer',
+                border: '2px solid rgba(255, 255, 255, 0.2)',
+                transition: 'all 0.3s ease'
+              }}
+              onClick={() => handleRecipeClick(recipe)}
+              onMouseEnter={(e) => {
+                e.target.style.transform = 'scale(1.02)';
+                e.target.style.border = '2px solid rgba(59, 130, 246, 0.4)';
+                e.target.style.boxShadow = '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)';
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.transform = 'scale(1)';
+                e.target.style.border = '2px solid rgba(255, 255, 255, 0.2)';
+                e.target.style.boxShadow = 'none';
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
+                <h3 style={{ fontWeight: 'bold', color: '#374151', fontSize: '1.125rem', margin: 0, flex: 1 }}>{recipe.name}</h3>
+                <span style={{
+                  ...styles.badge,
+                  background: recipe.category === 'Spirit' ? 'linear-gradient(135deg, #ef4444, #dc2626)' :
+                    recipe.category === 'Classic Cocktails' ? 'linear-gradient(135deg, #f59e0b, #ea580c)' :
+                      recipe.category === 'House Cocktails' ? 'linear-gradient(135deg, #9333ea, #7c3aed)' :
+                        recipe.category === 'Wine' ? 'linear-gradient(135deg, #9333ea, #ec4899)' :
+                          recipe.category === 'Coffee' ? 'linear-gradient(135deg, #d97706, #92400e)' :
+                            'linear-gradient(135deg, #2563eb, #1d4ed8)'
+                }}>
+                  {recipe.category}
+                </span>
+              </div>
+
+              <div style={{ fontSize: '0.875rem', color: '#6b7280', lineHeight: '1.5' }}>
+                {recipe.instructions && (
+                  <p style={{ fontStyle: 'italic', background: 'rgba(249, 250, 251, 0.5)', padding: '12px', borderRadius: '12px', margin: '0 0 12px 0' }}>
+                    "{recipe.instructions.length > 100 ? recipe.instructions.substring(0, 100) + '...' : recipe.instructions}"
+                  </p>
+                )}
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                  <div style={{ fontSize: '0.75rem', color: '#9ca3af', fontWeight: '500' }}>
+                    Created: {new Date(recipe.created_at).toLocaleDateString()}
+                  </div>
+                  <div style={{ padding: '4px 8px', background: 'rgba(59, 130, 246, 0.1)', borderRadius: '6px', fontSize: '0.75rem', color: '#1d4ed8', fontWeight: '600' }}>
+                    Click to view
+                  </div>
+                </div>
+
+                {recipe.tags && recipe.tags.length > 0 && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '12px' }}>
+                    {recipe.tags.map((tag, index) => (
+                      <span key={index} style={{
+                        background: 'linear-gradient(135deg, #e5e7eb, #d1d5db)',
+                        color: '#374151',
+                        padding: '4px 12px',
+                        borderRadius: '9999px',
+                        fontSize: '0.75rem',
+                        fontWeight: '500'
+                      }}>
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {filteredRecipes.length === 0 && (
+          <div style={{ textAlign: 'center', padding: '64px 0', color: '#6b7280' }}>
+            <MartiniIcon size={64} />
+            <p style={{ fontSize: '1.25rem', fontWeight: '500', margin: '24px 0 8px' }}>No recipes found.</p>
+            <p style={{ fontSize: '0.875rem', margin: 0 }}>Create your first recipe in the Recipe Builder!</p>
+          </div>
+        )}
+      </div>
+
+      {/* Recipe Detail Modal */}
+      {selectedRecipe && (
+        <RecipeDetailModal
+          recipe={selectedRecipe}
+          ingredients={ingredients}
+          onClose={() => setSelectedRecipe(null)}
+          onEdit={handleEdit}
+          onDelete={handleRecipeDeleted}
+        />
+      )}
+    </>
+  );
+}
+
+function App() {
+  const [ingredients, setIngredients] = useState([]);
+  const [recipes, setRecipes] = useState([]);
+  const [activeTab, setActiveTab] = useState('add');
+
+  const fetchIngredients = async () => {
+    try {
+      const { data, error } = await supabase.from('ingredients').select('*').order('date_updated', { ascending: false });
+      if (error) throw error;
+      setIngredients(data || []);
+    } catch (err) {
+      console.error('Error fetching ingredients:', err);
+    }
+  };
+
+  const fetchRecipes = async () => {
+    try {
+      const { data, error } = await supabase.from('recipes').select('*').order('created_at', { ascending: false });
+      if (error) throw error;
+      setRecipes(data || []);
+    } catch (err) {
+      console.error('Error fetching recipes:', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchIngredients();
+    fetchRecipes();
+  }, []);
+
+  const tabs = [
+    { id: 'add', label: 'Add Ingredients', icon: '➕' },
+    { id: 'recipes', label: 'Recipe Builder', icon: '🧮' },
+    { id: 'inventory', label: 'Inventory', icon: '📦' },
+    { id: 'saved', label: 'Saved Recipes', icon: '☕' }
+  ];
+
+  return (
+    <div style={styles.container}>
+      <header style={styles.header}>
+        <div style={styles.headerContent}>
+          <div style={styles.logo}>
+            <MartiniIcon size={32} />
+          </div>
+          <div>
+            <h1 style={styles.title}>Beverage Metrics Tool</h1>
+            <p style={styles.subtitle}>by MargaritaHotSauceLLC • Professional recipe costing and pricing calculator</p>
+          </div>
+        </div>
+      </header>
+
+      <nav style={styles.nav}>
+        <div style={styles.navContent}>
+          {tabs.map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              style={{
+                ...styles.navButton,
+                ...(activeTab === tab.id ? styles.navButtonActive : styles.navButtonInactive)
+              }}
+            >
+              <span style={{ fontSize: '1.25rem' }}>{tab.icon}</span>
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </nav>
+
+      <main style={styles.main}>
+        {activeTab === 'add' && <AddIngredientForm onIngredientAdded={fetchIngredients} />}
+        {activeTab === 'recipes' && <RecipeBuilder ingredients={ingredients} onRecipeSaved={fetchRecipes} />}
+        {activeTab === 'inventory' && <IngredientsList ingredients={ingredients} onRefresh={fetchIngredients} />}
+        {activeTab === 'saved' && <SavedRecipes recipes={recipes} ingredients={ingredients} onRecipeUpdated={fetchRecipes} />}
+      </main>
+    </div>
+  );
+}
+
+export default App;
 import React, { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 
@@ -240,6 +1083,10 @@ const styles = {
     background: 'linear-gradient(135deg, #6b7280, #4b5563)',
     padding: '12px 24px'
   },
+  buttonSmall: {
+    padding: '8px 16px',
+    fontSize: '0.875rem'
+  },
   message: {
     padding: '16px',
     borderRadius: '16px',
@@ -292,6 +1139,30 @@ const styles = {
     borderRadius: '16px',
     padding: '24px',
     backdropFilter: 'blur(8px)'
+  },
+  modal: {
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    background: 'rgba(0, 0, 0, 0.5)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1000,
+    padding: '24px'
+  },
+  modalContent: {
+    background: 'rgba(255, 255, 255, 0.95)',
+    backdropFilter: 'blur(20px)',
+    borderRadius: '24px',
+    padding: '32px',
+    maxWidth: '800px',
+    width: '100%',
+    maxHeight: '80vh',
+    overflow: 'auto',
+    boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)'
   }
 };
 
@@ -462,7 +1333,7 @@ function AddIngredientForm({ onIngredientAdded }) {
   );
 }
 
-function RecipeBuilder({ ingredients, onRecipeSaved }) {
+function RecipeBuilder({ ingredients, onRecipeSaved, editingRecipe, onCancelEdit }) {
   const [recipeName, setRecipeName] = useState('');
   const [recipeCategory, setRecipeCategory] = useState('Classic Cocktails');
   const [instructions, setInstructions] = useState('');
@@ -471,6 +1342,31 @@ function RecipeBuilder({ ingredients, onRecipeSaved }) {
   const [showBatchTool, setShowBatchTool] = useState(false);
   const [batchSize, setBatchSize] = useState(10);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Load recipe data when editing
+  useEffect(() => {
+    if (editingRecipe) {
+      setRecipeName(editingRecipe.name);
+      setRecipeCategory(editingRecipe.category);
+      setInstructions(editingRecipe.instructions || '');
+
+      // Load recipe ingredients
+      if (editingRecipe.recipe_ingredients && editingRecipe.recipe_ingredients.length > 0) {
+        setSelectedItems(editingRecipe.recipe_ingredients.map(ri => ({
+          ingredient_id: ri.ingredient_id,
+          amount_used: ri.amount_used,
+          unit: ri.unit_type
+        })));
+      }
+    } else {
+      // Clear form for new recipe
+      setRecipeName('');
+      setRecipeCategory('Classic Cocktails');
+      setInstructions('');
+      setSelectedItems([{ ingredient_id: '', amount_used: '', unit: 'ml' }]);
+      setCalculations(null);
+    }
+  }, [editingRecipe]);
 
   const addIngredient = () => {
     setSelectedItems([...selectedItems, { ingredient_id: '', amount_used: '', unit: 'ml' }]);
@@ -559,17 +1455,39 @@ function RecipeBuilder({ ingredients, onRecipeSaved }) {
         category: recipeCategory,
         instructions: instructions,
         tags: [],
-        created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };
 
-      const { data: recipe, error: recipeError } = await supabase
-        .from('recipes')
-        .insert([recipeData])
-        .select();
+      let recipe;
+      if (editingRecipe) {
+        // Update existing recipe
+        const { data: updatedRecipe, error: recipeError } = await supabase
+          .from('recipes')
+          .update(recipeData)
+          .eq('id', editingRecipe.id)
+          .select();
 
-      if (recipeError) throw recipeError;
+        if (recipeError) throw recipeError;
+        recipe = updatedRecipe;
 
+        // Delete existing ingredients
+        await supabase
+          .from('recipe_ingredients')
+          .delete()
+          .eq('recipe_id', editingRecipe.id);
+      } else {
+        // Create new recipe
+        recipeData.created_at = new Date().toISOString();
+        const { data: newRecipe, error: recipeError } = await supabase
+          .from('recipes')
+          .insert([recipeData])
+          .select();
+
+        if (recipeError) throw recipeError;
+        recipe = newRecipe;
+      }
+
+      // Insert recipe ingredients
       const recipeIngredients = selectedItems
         .filter(item => item.ingredient_id && item.amount_used)
         .map(item => ({
@@ -587,15 +1505,19 @@ function RecipeBuilder({ ingredients, onRecipeSaved }) {
         if (ingredientsError) throw ingredientsError;
       }
 
-      alert(`🍸 Recipe "${recipeName}" saved to database with smart unit conversions!`);
+      alert(`🍸 Recipe "${recipeName}" ${editingRecipe ? 'updated' : 'saved'} successfully!`);
       if (onRecipeSaved) onRecipeSaved();
+      if (onCancelEdit) onCancelEdit();
 
-      setRecipeName('');
-      setInstructions('');
-      setSelectedItems([{ ingredient_id: '', amount_used: '', unit: 'ml' }]);
-      setCalculations(null);
+      // Clear form if not editing
+      if (!editingRecipe) {
+        setRecipeName('');
+        setInstructions('');
+        setSelectedItems([{ ingredient_id: '', amount_used: '', unit: 'ml' }]);
+        setCalculations(null);
+      }
     } catch (error) {
-      alert(`❌ Error saving recipe: ${error.message}`);
+      alert(`❌ Error ${editingRecipe ? 'updating' : 'saving'} recipe: ${error.message}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -617,557 +1539,21 @@ function RecipeBuilder({ ingredients, onRecipeSaved }) {
   return (
     <div style={{ ...styles.card, maxWidth: '1000px' }}>
       <div style={styles.cardHeader}>
-        <div style={{ ...styles.logo, background: 'linear-gradient(135deg, #10b981, #2563eb)' }}>
+        <div style={{ ...styles.logo, background: editingRecipe ? 'linear-gradient(135deg, #f59e0b, #ea580c)' : 'linear-gradient(135deg, #10b981, #2563eb)' }}>
           <MartiniIcon size={28} />
         </div>
         <div style={{ flex: 1 }}>
-          <h2 style={{ ...styles.cardTitle, background: 'linear-gradient(135deg, #10b981, #2563eb)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-            Recipe Builder & Cost Calculator
+          <h2 style={{ ...styles.cardTitle, background: editingRecipe ? 'linear-gradient(135deg, #f59e0b, #ea580c)' : 'linear-gradient(135deg, #10b981, #2563eb)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+            {editingRecipe ? `Edit Recipe: ${editingRecipe.name}` : 'Recipe Builder & Cost Calculator'}
           </h2>
-          <p style={styles.cardSubtitle}>Create and analyze beverage recipes • MargaritaHotSauceLLC</p>
+          <p style={styles.cardSubtitle}>
+            {editingRecipe ? 'Modify your saved recipe' : 'Create and analyze beverage recipes'} • MargaritaHotSauceLLC
+          </p>
         </div>
         <div style={{ display: 'flex', gap: '12px' }}>
-          <button onClick={saveRecipe} disabled={isSubmitting} style={{ ...styles.button, fontSize: '0.875rem', padding: '12px 20px' }}>
-            💾 Save Recipe
-          </button>
-          <button onClick={exportRecipe} disabled={!calculations} style={{ ...styles.buttonSecondary, ...styles.button, fontSize: '0.875rem' }}>
-            📥 Export
-          </button>
-        </div>
-      </div>
-
-      <div style={{ ...styles.message, ...styles.messageInfo, marginBottom: '24px' }}>
-        🔄 <strong>Auto Unit Conversion:</strong> Mix units freely! Use 30ml gin + 1oz vermouth + 2cl olive brine - the app handles all conversions automatically.
-      </div>
-
-      <div style={{ ...styles.grid, ...styles.gridCols2, marginBottom: '32px' }}>
-        <input
-          value={recipeName}
-          onChange={(e) => setRecipeName(e.target.value)}
-          placeholder="Recipe Name (e.g., Classic Martini, House Margarita)"
-          style={styles.input}
-        />
-
-        <select
-          value={recipeCategory}
-          onChange={(e) => setRecipeCategory(e.target.value)}
-          style={styles.input}
-        >
-          {Object.keys(CATEGORY_TARGETS).map(cat => <option key={cat} value={cat}>{cat}</option>)}
-        </select>
-      </div>
-
-      <textarea
-        value={instructions}
-        onChange={(e) => setInstructions(e.target.value)}
-        placeholder="Step-by-step preparation instructions..."
-        rows={3}
-        style={{ ...styles.input, marginBottom: '32px', resize: 'vertical' }}
-      />
-
-      <div style={{ marginBottom: '32px' }}>
-        <h3 style={{ marginBottom: '16px', fontWeight: '600' }}>Recipe Ingredients</h3>
-        {selectedItems.map((item, index) => {
-          const ingredient = ingredients.find(i => i.id === item.ingredient_id);
-          const showConversion = ingredient && item.unit && ingredient.purchase_unit_type !== item.unit;
-
-          return (
-            <div key={index} style={{ marginBottom: '12px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: '12px', alignItems: 'center', padding: '16px', background: 'rgba(249, 250, 251, 0.5)', borderRadius: '12px' }}>
-                <select
-                  value={item.ingredient_id}
-                  onChange={e => handleChange(index, 'ingredient_id', e.target.value)}
-                  style={{ ...styles.input, margin: 0, padding: '12px' }}
-                >
-                  <option value="">Select Ingredient</option>
-                  {ingredients.map(ing => (
-                    <option key={ing.id} value={ing.id}>{ing.name} ({ing.category}) - {ing.purchase_unit_type}</option>
-                  ))}
-                </select>
-
-                <input
-                  type="number"
-                  step="0.1"
-                  value={item.amount_used}
-                  onChange={e => handleChange(index, 'amount_used', e.target.value)}
-                  placeholder="Amount"
-                  style={{ ...styles.input, margin: 0, padding: '12px' }}
-                />
-
-                <select
-                  value={item.unit}
-                  onChange={e => handleChange(index, 'unit', e.target.value)}
-                  style={{ ...styles.input, margin: 0, padding: '12px' }}
-                >
-                  <option value="ml">ml</option>
-                  <option value="oz">oz</option>
-                  <option value="l">l</option>
-                  <option value="cl">cl</option>
-                  <option value="g">g</option>
-                  <option value="kg">kg</option>
-                  <option value="unit">unit</option>
-                </select>
-
-                {selectedItems.length > 1 && (
-                  <button
-                    onClick={() => removeIngredient(index)}
-                    style={{ padding: '8px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer' }}
-                  >
-                    🗑️
-                  </button>
-                )}
-              </div>
-
-              {showConversion && item.amount_used && (
-                <div style={{ marginTop: '8px', padding: '12px', background: 'rgba(59, 130, 246, 0.1)', borderRadius: '8px', fontSize: '0.875rem', color: '#1d4ed8' }}>
-                  💡 Auto-converting: {ingredient.purchase_unit_type} → {item.unit} | Cost: ฿{getUnitCostInTargetUnit(ingredient, item.unit).toFixed(4)} per {item.unit}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', marginBottom: '32px' }}>
-        <button onClick={addIngredient} style={{ ...styles.buttonSecondary, ...styles.button, fontSize: '0.875rem' }}>
-          ➕ Add Ingredient
-        </button>
-
-        <button onClick={calculateCost} style={{ ...styles.button, fontSize: '0.875rem' }}>
-          🧮 Calculate Cost & Pricing
-        </button>
-
-        <button onClick={() => setShowBatchTool(!showBatchTool)} style={{ ...styles.button, background: 'linear-gradient(135deg, #9333ea, #ec4899)', fontSize: '0.875rem' }}>
-          📊 Batch Tool
-        </button>
-      </div>
-
-      {showBatchTool && calculations && (
-        <div style={{ background: 'linear-gradient(135deg, rgba(147, 51, 234, 0.1), rgba(236, 72, 153, 0.1))', border: '1px solid rgba(147, 51, 234, 0.2)', borderRadius: '16px', padding: '24px', marginBottom: '32px' }}>
-          <h3 style={{ marginTop: 0, marginBottom: '16px', color: '#7c3aed', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            📊 Batch Scaling Tool
-          </h3>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
-            <label style={{ fontSize: '0.875rem', fontWeight: '600', color: '#7c3aed' }}>Batch Size:</label>
-            <input
-              type="number"
-              value={batchSize}
-              onChange={(e) => setBatchSize(parseInt(e.target.value) || 1)}
-              style={{ ...styles.input, width: '80px', margin: 0, padding: '8px 12px' }}
-              min="1"
-            />
-            <span style={{ fontSize: '0.875rem', color: '#7c3aed', fontWeight: '500' }}>servings</span>
-          </div>
-          <div style={{ ...styles.grid, ...styles.gridCols3 }}>
-            <div style={{ background: 'rgba(255, 255, 255, 0.6)', padding: '16px', borderRadius: '12px' }}>
-              <div style={{ fontWeight: 'bold', color: '#7c3aed', fontSize: '0.875rem' }}>Batch Total Cost</div>
-              <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#374151' }}>฿{(parseFloat(calculations.totalCost) * batchSize).toFixed(2)}</div>
-            </div>
-            <div style={{ background: 'rgba(255, 255, 255, 0.6)', padding: '16px', borderRadius: '12px' }}>
-              <div style={{ fontWeight: 'bold', color: '#7c3aed', fontSize: '0.875rem' }}>Revenue Potential</div>
-              <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#10b981' }}>฿{(parseFloat(calculations.suggestedPrice) * batchSize).toFixed(2)}</div>
-            </div>
-            <div style={{ background: 'rgba(255, 255, 255, 0.6)', padding: '16px', borderRadius: '12px' }}>
-              <div style={{ fontWeight: 'bold', color: '#7c3aed', fontSize: '0.875rem' }}>Batch Profit</div>
-              <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#2563eb' }}>฿{((parseFloat(calculations.suggestedPrice) - parseFloat(calculations.totalCost)) * batchSize).toFixed(2)}</div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {calculations && (
-        <div style={{ background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(16, 185, 129, 0.1))', border: '1px solid rgba(59, 130, 246, 0.2)', borderRadius: '24px', padding: '32px', backdropFilter: 'blur(8px)' }}>
-          <h3 style={{ fontSize: '1.5rem', fontWeight: 'bold', background: 'linear-gradient(135deg, #2563eb, #9333ea)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <MartiniIcon size={28} />
-            Cost Analysis & Pricing Suggestions
-          </h3>
-
-          <div style={{ ...styles.grid, gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '24px', marginBottom: '32px' }}>
-            <div style={{ background: 'rgba(255, 255, 255, 0.7)', padding: '24px', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.2)', textAlign: 'center', transition: 'transform 0.3s ease' }}>
-              <div style={{ fontSize: '2rem', fontWeight: 'bold', color: '#ef4444', marginBottom: '8px' }}>฿{calculations.totalCost}</div>
-              <div style={{ fontSize: '0.875rem', fontWeight: '600', color: '#6b7280' }}>Total Cost</div>
-            </div>
-
-            <div style={{ background: 'rgba(255, 255, 255, 0.7)', padding: '24px', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.2)', textAlign: 'center', transition: 'transform 0.3s ease' }}>
-              <div style={{ fontSize: '2rem', fontWeight: 'bold', color: '#10b981', marginBottom: '8px' }}>฿{calculations.suggestedPrice}</div>
-              <div style={{ fontSize: '0.875rem', fontWeight: '600', color: '#6b7280' }}>Suggested Price</div>
-            </div>
-
-            <div style={{ background: 'rgba(255, 255, 255, 0.7)', padding: '24px', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.2)', textAlign: 'center', transition: 'transform 0.3s ease' }}>
-              <div style={{ fontSize: '2rem', fontWeight: 'bold', color: '#2563eb', marginBottom: '8px' }}>{calculations.margin}%</div>
-              <div style={{ fontSize: '0.875rem', fontWeight: '600', color: '#6b7280' }}>Gross Margin</div>
-            </div>
-
-            <div style={{ background: 'rgba(255, 255, 255, 0.7)', padding: '24px', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.2)', textAlign: 'center', transition: 'transform 0.3s ease' }}>
-              <div style={{ fontSize: '2rem', fontWeight: 'bold', color: '#9333ea', marginBottom: '8px' }}>{calculations.minPourCost}%</div>
-              <div style={{ fontSize: '0.875rem', fontWeight: '600', color: '#6b7280' }}>Pour Cost @Target</div>
-            </div>
-          </div>
-
-          {/* Ingredient Breakdown */}
-          <div style={{ background: 'rgba(255, 255, 255, 0.7)', padding: '24px', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.2)', marginBottom: '24px' }}>
-            <h4 style={{ fontWeight: 'bold', marginBottom: '16px', fontSize: '1.125rem', color: '#374151', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              🧾 Ingredient Cost Breakdown
-            </h4>
-            {calculations.ingredientBreakdown.map((item, index) => (
-              <div key={index} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', background: 'rgba(249, 250, 251, 0.5)', borderRadius: '8px', marginBottom: '8px' }}>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: '600', color: '#374151' }}>{item.name}</div>
-                  <div style={{ fontSize: '0.875rem', color: '#6b7280' }}>{item.amount} {item.unit} @ ฿{item.unitCost}/{item.unit.split(' ')[0]}</div>
-                </div>
-                <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontWeight: 'bold', color: '#10b981' }}>฿{item.cost}</div>
-                  <div style={{ fontSize: '0.875rem', color: '#6b7280' }}>{item.percentage}%</div>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div style={{ background: 'rgba(255, 255, 255, 0.7)', padding: '24px', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.2)' }}>
-            <h4 style={{ fontWeight: 'bold', marginBottom: '16px', fontSize: '1.125rem', color: '#374151', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              📊 Pricing Range Analysis ({recipeCategory})
-            </h4>
-            <div style={{ fontSize: '0.875rem', color: '#4b5563', lineHeight: '1.6' }}>
-              <div style={{ marginBottom: '8px' }}><strong>Industry Target Pour Cost:</strong> {(CATEGORY_TARGETS[recipeCategory].pourCostMin * 100).toFixed(0)}% - {(CATEGORY_TARGETS[recipeCategory].pourCostMax * 100).toFixed(0)}%</div>
-              <div style={{ marginBottom: '8px' }}><strong>Price Range:</strong> ฿{calculations.minPrice} - ฿{calculations.maxPrice}</div>
-              <div><strong>Recommended:</strong> ฿{calculations.suggestedPrice} (Pour cost: {calculations.minPourCost}%)</div>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function IngredientsList({ ingredients, onRefresh }) {
-  const [filter, setFilter] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState('All');
-
-  const filteredIngredients = ingredients.filter(ingredient => {
-    const matchesName = ingredient.name.toLowerCase().includes(filter.toLowerCase());
-    const matchesCategory = categoryFilter === 'All' || ingredient.category === categoryFilter;
-    return matchesName && matchesCategory;
-  });
-
-  const categories = ['All', ...Object.keys(CATEGORY_TARGETS)];
-
-  const exportIngredients = () => {
-    const exportData = filteredIngredients.map(ing => ({
-      name: ing.name,
-      category: ing.category,
-      quantity: ing.purchase_unit_qty,
-      unit: ing.purchase_unit_type,
-      price: ing.purchase_price,
-      costPerUnit: (ing.purchase_price / ing.purchase_unit_qty).toFixed(4),
-      tags: ing.tags ? ing.tags.join(', ') : ''
-    }));
-
-    exportToCSV(exportData, 'ingredients_inventory.csv');
-  };
-
-  return (
-    <div style={{ ...styles.card, maxWidth: '1200px' }}>
-      <div style={styles.cardHeader}>
-        <div style={{ ...styles.logo, background: 'linear-gradient(135deg, #9333ea, #ec4899)' }}>
-          <MartiniIcon size={28} />
-        </div>
-        <div style={{ flex: 1 }}>
-          <h2 style={{ ...styles.cardTitle, background: 'linear-gradient(135deg, #9333ea, #ec4899)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-            Ingredient Inventory
-          </h2>
-          <p style={styles.cardSubtitle}>Manage your beverage ingredients • MargaritaHotSauceLLC</p>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <span style={{ fontSize: '0.875rem', fontWeight: '600', color: '#6b7280', background: '#f3f4f6', padding: '8px 16px', borderRadius: '9999px' }}>
-            {filteredIngredients.length} ingredients
-          </span>
-          <button onClick={exportIngredients} style={{ ...styles.button, background: 'linear-gradient(135deg, #10b981, #059669)', fontSize: '0.875rem', padding: '12px 20px' }}>
-            📥 Export CSV
-          </button>
-        </div>
-      </div>
-
-      <div style={{ display: 'flex', gap: '24px', marginBottom: '32px' }}>
-        <div style={{ position: 'relative', flex: 1 }}>
-          <span style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: '#9ca3af' }}>🔍</span>
-          <input
-            type="text"
-            placeholder="Search ingredients..."
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-            style={{ ...styles.input, paddingLeft: '48px' }}
-          />
-        </div>
-        <select
-          value={categoryFilter}
-          onChange={(e) => setCategoryFilter(e.target.value)}
-          style={{ ...styles.input, minWidth: '192px' }}
-        >
-          {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-        </select>
-      </div>
-
-      <div style={{ ...styles.grid, gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '24px' }}>
-        {filteredIngredients.map(ingredient => (
-          <div key={ingredient.id} style={{ ...styles.ingredientCard, cursor: 'pointer' }} onMouseEnter={(e) => e.target.style.transform = 'scale(1.02)'} onMouseLeave={(e) => e.target.style.transform = 'scale(1)'}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
-              <h3 style={{ fontWeight: 'bold', color: '#374151', fontSize: '1.125rem', margin: 0, flex: 1 }}>{ingredient.name}</h3>
-              <span style={{
-                ...styles.badge,
-                background: ingredient.category === 'Spirit' ? 'linear-gradient(135deg, #ef4444, #dc2626)' :
-                  ingredient.category === 'Classic Cocktails' ? 'linear-gradient(135deg, #f59e0b, #ea580c)' :
-                    ingredient.category === 'House Cocktails' ? 'linear-gradient(135deg, #9333ea, #7c3aed)' :
-                      ingredient.category === 'Wine' ? 'linear-gradient(135deg, #9333ea, #ec4899)' :
-                        ingredient.category === 'Beer' ? 'linear-gradient(135deg, #f59e0b, #d97706)' :
-                          ingredient.category === 'Coffee' ? 'linear-gradient(135deg, #d97706, #92400e)' :
-                            'linear-gradient(135deg, #2563eb, #1d4ed8)'
-              }}>
-                {ingredient.category}
-              </span>
-            </div>
-
-            <div style={{ fontSize: '0.875rem', color: '#6b7280', lineHeight: '1.5' }}>
-              <div style={{ background: 'rgba(249, 250, 251, 0.5)', padding: '12px', borderRadius: '12px', marginBottom: '12px' }}>
-                <div style={{ fontWeight: '500' }}>฿{ingredient.purchase_price} per {ingredient.purchase_unit_qty}{ingredient.purchase_unit_type}</div>
-              </div>
-              <div style={{ fontWeight: 'bold', color: '#10b981', background: 'rgba(16, 185, 129, 0.1)', padding: '12px', borderRadius: '12px' }}>
-                ฿{(ingredient.purchase_price / ingredient.purchase_unit_qty).toFixed(4)} per {ingredient.purchase_unit_type}
-              </div>
-
-              {/* Show common unit conversions */}
-              <div style={{ marginTop: '12px', padding: '12px', background: 'rgba(59, 130, 246, 0.1)', borderRadius: '12px' }}>
-                <div style={{ fontWeight: '600', color: '#1d4ed8', marginBottom: '8px' }}>Smart Conversions:</div>
-                {UNIT_CONVERSIONS[ingredient.purchase_unit_type]?.type === 'volume' && (
-                  <div style={{ fontSize: '0.75rem', color: '#1d4ed8' }}>
-                    ml: ฿{getUnitCostInTargetUnit(ingredient, 'ml').toFixed(4)} |
-                    oz: ฿{getUnitCostInTargetUnit(ingredient, 'oz').toFixed(4)} |
-                    cl: ฿{getUnitCostInTargetUnit(ingredient, 'cl').toFixed(4)}
-                  </div>
-                )}
-              </div>
-
-              {ingredient.tags && ingredient.tags.length > 0 && (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '12px' }}>
-                  {ingredient.tags.map((tag, index) => (
-                    <span key={index} style={{
-                      background: 'linear-gradient(135deg, #e5e7eb, #d1d5db)',
-                      color: '#374151',
-                      padding: '4px 12px',
-                      borderRadius: '9999px',
-                      fontSize: '0.75rem',
-                      fontWeight: '500'
-                    }}>
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {filteredIngredients.length === 0 && (
-        <div style={{ textAlign: 'center', padding: '64px 0', color: '#6b7280' }}>
-          <MartiniIcon size={64} />
-          <p style={{ fontSize: '1.25rem', fontWeight: '500', margin: '24px 0 8px' }}>No ingredients found matching your search.</p>
-          <p style={{ fontSize: '0.875rem', margin: 0 }}>Try adjusting your search terms or category filter.</p>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function SavedRecipes({ recipes }) {
-  const [filter, setFilter] = useState('');
-
-  const filteredRecipes = recipes.filter(recipe =>
-    recipe.name.toLowerCase().includes(filter.toLowerCase())
-  );
-
-  const exportRecipes = () => {
-    const exportData = filteredRecipes.map(recipe => ({
-      name: recipe.name,
-      category: recipe.category,
-      instructions: recipe.instructions || '',
-      tags: recipe.tags ? recipe.tags.join(', ') : '',
-      created: new Date(recipe.created_at).toLocaleDateString()
-    }));
-
-    exportToCSV(exportData, 'saved_recipes.csv');
-  };
-
-  return (
-    <div style={{ ...styles.card, maxWidth: '1200px' }}>
-      <div style={styles.cardHeader}>
-        <div style={{ ...styles.logo, background: 'linear-gradient(135deg, #ea580c, #dc2626)' }}>
-          <MartiniIcon size={28} />
-        </div>
-        <div style={{ flex: 1 }}>
-          <h2 style={{ ...styles.cardTitle, background: 'linear-gradient(135deg, #ea580c, #dc2626)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-            Saved Recipes
-          </h2>
-          <p style={styles.cardSubtitle}>Your beverage recipe collection • MargaritaHotSauceLLC</p>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <span style={{ fontSize: '0.875rem', fontWeight: '600', color: '#6b7280', background: '#f3f4f6', padding: '8px 16px', borderRadius: '9999px' }}>
-            {filteredRecipes.length} recipes
-          </span>
-          <button onClick={exportRecipes} style={{ ...styles.button, background: 'linear-gradient(135deg, #ea580c, #dc2626)', fontSize: '0.875rem', padding: '12px 20px' }}>
-            📥 Export CSV
-          </button>
-        </div>
-      </div>
-
-      <div style={{ marginBottom: '32px' }}>
-        <div style={{ position: 'relative' }}>
-          <span style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: '#9ca3af' }}>🔍</span>
-          <input
-            type="text"
-            placeholder="Search recipes..."
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-            style={{ ...styles.input, paddingLeft: '48px' }}
-          />
-        </div>
-      </div>
-
-      <div style={{ ...styles.grid, gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: '24px' }}>
-        {filteredRecipes.map(recipe => (
-          <div key={recipe.id} style={{ ...styles.ingredientCard, cursor: 'pointer' }} onMouseEnter={(e) => e.target.style.transform = 'scale(1.02)'} onMouseLeave={(e) => e.target.style.transform = 'scale(1)'}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
-              <h3 style={{ fontWeight: 'bold', color: '#374151', fontSize: '1.125rem', margin: 0, flex: 1 }}>{recipe.name}</h3>
-              <span style={{
-                ...styles.badge,
-                background: recipe.category === 'Spirit' ? 'linear-gradient(135deg, #ef4444, #dc2626)' :
-                  recipe.category === 'Classic Cocktails' ? 'linear-gradient(135deg, #f59e0b, #ea580c)' :
-                    recipe.category === 'House Cocktails' ? 'linear-gradient(135deg, #9333ea, #7c3aed)' :
-                      recipe.category === 'Wine' ? 'linear-gradient(135deg, #9333ea, #ec4899)' :
-                        recipe.category === 'Coffee' ? 'linear-gradient(135deg, #d97706, #92400e)' :
-                          'linear-gradient(135deg, #2563eb, #1d4ed8)'
-              }}>
-                {recipe.category}
-              </span>
-            </div>
-
-            <div style={{ fontSize: '0.875rem', color: '#6b7280', lineHeight: '1.5' }}>
-              {recipe.instructions && (
-                <p style={{ fontStyle: 'italic', background: 'rgba(249, 250, 251, 0.5)', padding: '12px', borderRadius: '12px', margin: '0 0 12px 0' }}>
-                  "{recipe.instructions}"
-                </p>
-              )}
-              <div style={{ fontSize: '0.75rem', color: '#9ca3af', fontWeight: '500' }}>
-                Created: {new Date(recipe.created_at).toLocaleDateString()}
-              </div>
-              {recipe.tags && recipe.tags.length > 0 && (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '12px' }}>
-                  {recipe.tags.map((tag, index) => (
-                    <span key={index} style={{
-                      background: 'linear-gradient(135deg, #e5e7eb, #d1d5db)',
-                      color: '#374151',
-                      padding: '4px 12px',
-                      borderRadius: '9999px',
-                      fontSize: '0.75rem',
-                      fontWeight: '500'
-                    }}>
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {filteredRecipes.length === 0 && (
-        <div style={{ textAlign: 'center', padding: '64px 0', color: '#6b7280' }}>
-          <MartiniIcon size={64} />
-          <p style={{ fontSize: '1.25rem', fontWeight: '500', margin: '24px 0 8px' }}>No recipes found.</p>
-          <p style={{ fontSize: '0.875rem', margin: 0 }}>Create your first recipe in the Recipe Builder!</p>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function App() {
-  const [ingredients, setIngredients] = useState([]);
-  const [recipes, setRecipes] = useState([]);
-  const [activeTab, setActiveTab] = useState('add');
-
-  const fetchIngredients = async () => {
-    try {
-      const { data, error } = await supabase.from('ingredients').select('*').order('date_updated', { ascending: false });
-      if (error) throw error;
-      setIngredients(data || []);
-    } catch (err) {
-      console.error('Error fetching ingredients:', err);
-    }
-  };
-
-  const fetchRecipes = async () => {
-    try {
-      const { data, error } = await supabase.from('recipes').select('*').order('created_at', { ascending: false });
-      if (error) throw error;
-      setRecipes(data || []);
-    } catch (err) {
-      console.error('Error fetching recipes:', err);
-    }
-  };
-
-  useEffect(() => {
-    fetchIngredients();
-    fetchRecipes();
-  }, []);
-
-  const tabs = [
-    { id: 'add', label: 'Add Ingredients', icon: '➕' },
-    { id: 'recipes', label: 'Recipe Builder', icon: '🧮' },
-    { id: 'inventory', label: 'Inventory', icon: '📦' },
-    { id: 'saved', label: 'Saved Recipes', icon: '☕' }
-  ];
-
-  return (
-    <div style={styles.container}>
-      <header style={styles.header}>
-        <div style={styles.headerContent}>
-          <div style={styles.logo}>
-            <MartiniIcon size={32} />
-          </div>
-          <div>
-            <h1 style={styles.title}>Beverage Metrics Tool</h1>
-            <p style={styles.subtitle}>by MargaritaHotSauceLLC • Professional recipe costing and pricing calculator</p>
-          </div>
-        </div>
-      </header>
-
-      <nav style={styles.nav}>
-        <div style={styles.navContent}>
-          {tabs.map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              style={{
-                ...styles.navButton,
-                ...(activeTab === tab.id ? styles.navButtonActive : styles.navButtonInactive)
-              }}
-            >
-              <span style={{ fontSize: '1.25rem' }}>{tab.icon}</span>
-              {tab.label}
+          {editingRecipe && (
+            <button onClick={onCancelEdit} style={{ ...styles.buttonSecondary, ...styles.button, fontSize: '0.875rem', padding: '12px 20px' }}>
+              ❌ Cancel Edit
             </button>
-          ))}
-        </div>
-      </nav>
-
-      <main style={styles.main}>
-        {activeTab === 'add' && <AddIngredientForm onIngredientAdded={fetchIngredients} />}
-        {activeTab === 'recipes' && <RecipeBuilder ingredients={ingredients} onRecipeSaved={fetchRecipes} />}
-        {activeTab === 'inventory' && <IngredientsList ingredients={ingredients} onRefresh={fetchIngredients} />}
-        {activeTab === 'saved' && <SavedRecipes recipes={recipes} />}
-      </main>
-    </div>
-  );
-}
-
-export default App;
+          )}
+          <button onClick={saveRecipe} disabled={isSubmitting} style
