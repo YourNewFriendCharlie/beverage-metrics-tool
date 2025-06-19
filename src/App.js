@@ -12,6 +12,58 @@ function MartiniIcon({ size = 32 }) {
   return <span style={{ fontSize: `${size}px` }}>🍸</span>;
 }
 
+// Unit conversion system
+const UNIT_CONVERSIONS = {
+  // Volume conversions (base: ml)
+  'ml': { toBase: 1, type: 'volume' },
+  'l': { toBase: 1000, type: 'volume' },
+  'cl': { toBase: 10, type: 'volume' },
+  'oz': { toBase: 29.5735, type: 'volume' },
+  'bottle': { toBase: 750, type: 'volume' }, // Standard wine bottle
+  'can': { toBase: 330, type: 'volume' }, // Standard beer can
+
+  // Weight conversions (base: g)
+  'g': { toBase: 1, type: 'weight' },
+  'kg': { toBase: 1000, type: 'weight' },
+  'lb': { toBase: 453.592, type: 'weight' },
+
+  // Count conversions (base: unit)
+  'unit': { toBase: 1, type: 'count' }
+};
+
+// Convert between units of the same type
+const convertUnits = (amount, fromUnit, toUnit) => {
+  const from = UNIT_CONVERSIONS[fromUnit];
+  const to = UNIT_CONVERSIONS[toUnit];
+
+  // If units are the same, no conversion needed
+  if (fromUnit === toUnit) return amount;
+
+  // If units are different types, can't convert
+  if (!from || !to || from.type !== to.type) {
+    return amount; // Return original amount if conversion not possible
+  }
+
+  // Convert from source unit to base unit, then to target unit
+  const baseAmount = amount * from.toBase;
+  const convertedAmount = baseAmount / to.toBase;
+
+  return convertedAmount;
+};
+
+// Get unit cost in any unit
+const getUnitCostInTargetUnit = (ingredient, targetUnit) => {
+  const baseCostPerUnit = ingredient.purchase_price / ingredient.purchase_unit_qty;
+  const convertedQuantity = convertUnits(1, ingredient.purchase_unit_type, targetUnit);
+
+  if (convertedQuantity === 1 && ingredient.purchase_unit_type !== targetUnit) {
+    // Conversion not possible between these unit types
+    return baseCostPerUnit;
+  }
+
+  return baseCostPerUnit / convertedQuantity;
+};
+
 // Industry pricing targets
 const CATEGORY_TARGETS = {
   'Spirit': { pourCostMin: 0.18, pourCostMax: 0.22, markup: 4.5 },
@@ -204,6 +256,11 @@ const styles = {
     color: '#dc2626',
     borderColor: 'rgba(239, 68, 68, 0.2)'
   },
+  messageInfo: {
+    background: 'rgba(59, 130, 246, 0.1)',
+    color: '#1d4ed8',
+    borderColor: 'rgba(59, 130, 246, 0.2)'
+  },
   grid: {
     display: 'grid',
     gap: '24px'
@@ -274,11 +331,11 @@ function AddIngredientForm({ onIngredientAdded }) {
         date_updated: new Date().toISOString()
       };
 
-      const { data, error } = await supabase.from('ingredients').insert([ingredientData]).select();
+      const { error } = await supabase.from('ingredients').insert([ingredientData]).select();
       if (error) throw error;
 
       setFormData({ name: '', purchase_unit_qty: '', purchase_unit_type: 'ml', purchase_price: '', category: 'Spirit', tags: '' });
-      setMessage({ type: 'success', text: `🍸 "${ingredientData.name}" saved to database!` });
+      setMessage({ type: 'success', text: `🍸 "${ingredientData.name}" saved to database with smart unit conversion enabled!` });
       if (onIngredientAdded) onIngredientAdded();
     } catch (err) {
       setMessage({ type: 'error', text: `❌ Error: ${err.message}` });
@@ -303,10 +360,18 @@ function AddIngredientForm({ onIngredientAdded }) {
       </div>
 
       {message.text && (
-        <div style={{ ...styles.message, ...(message.type === 'success' ? styles.messageSuccess : styles.messageError) }}>
+        <div style={{
+          ...styles.message,
+          ...(message.type === 'success' ? styles.messageSuccess :
+            message.type === 'info' ? styles.messageInfo : styles.messageError)
+        }}>
           {message.text}
         </div>
       )}
+
+      <div style={{ ...styles.message, ...styles.messageInfo, marginBottom: '24px' }}>
+        💡 <strong>Smart Unit Conversion:</strong> Buy ingredients in any unit (liters, bottles, kg) and use them in recipes with different units (ml, oz, g). The app automatically handles all conversions!
+      </div>
 
       <div style={{ ...styles.grid, gap: '24px' }}>
         <input
@@ -430,17 +495,24 @@ function RecipeBuilder({ ingredients, onRecipeSaved }) {
       const ingredient = ingredients.find(i => i.id === item.ingredient_id);
       if (!ingredient || !item.amount_used) return;
 
-      const unitCost = ingredient.purchase_price / ingredient.purchase_unit_qty;
-      const itemCost = parseFloat(item.amount_used) * unitCost;
+      // Use smart unit conversion to get cost in the recipe's unit
+      const unitCostInRecipeUnit = getUnitCostInTargetUnit(ingredient, item.unit);
+      const itemCost = parseFloat(item.amount_used) * unitCostInRecipeUnit;
+
       totalCost += itemCost;
       validItems++;
+
+      // Show conversion info if units are different
+      const conversionInfo = ingredient.purchase_unit_type !== item.unit ?
+        ` (converted from ${ingredient.purchase_unit_type})` : '';
 
       ingredientBreakdown.push({
         name: ingredient.name,
         amount: item.amount_used,
-        unit: item.unit,
+        unit: item.unit + conversionInfo,
         cost: itemCost.toFixed(2),
-        percentage: 0
+        percentage: 0,
+        unitCost: unitCostInRecipeUnit.toFixed(4)
       });
     });
 
@@ -515,7 +587,7 @@ function RecipeBuilder({ ingredients, onRecipeSaved }) {
         if (ingredientsError) throw ingredientsError;
       }
 
-      alert(`🍸 Recipe "${recipeName}" saved to database!`);
+      alert(`🍸 Recipe "${recipeName}" saved to database with smart unit conversions!`);
       if (onRecipeSaved) onRecipeSaved();
 
       setRecipeName('');
@@ -564,6 +636,10 @@ function RecipeBuilder({ ingredients, onRecipeSaved }) {
         </div>
       </div>
 
+      <div style={{ ...styles.message, ...styles.messageInfo, marginBottom: '24px' }}>
+        🔄 <strong>Auto Unit Conversion:</strong> Mix units freely! Use 30ml gin + 1oz vermouth + 2cl olive brine - the app handles all conversions automatically.
+      </div>
+
       <div style={{ ...styles.grid, ...styles.gridCols2, marginBottom: '32px' }}>
         <input
           value={recipeName}
@@ -591,49 +667,65 @@ function RecipeBuilder({ ingredients, onRecipeSaved }) {
 
       <div style={{ marginBottom: '32px' }}>
         <h3 style={{ marginBottom: '16px', fontWeight: '600' }}>Recipe Ingredients</h3>
-        {selectedItems.map((item, index) => (
-          <div key={index} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: '12px', alignItems: 'center', marginBottom: '12px', padding: '16px', background: 'rgba(249, 250, 251, 0.5)', borderRadius: '12px' }}>
-            <select
-              value={item.ingredient_id}
-              onChange={e => handleChange(index, 'ingredient_id', e.target.value)}
-              style={{ ...styles.input, margin: 0, padding: '12px' }}
-            >
-              <option value="">Select Ingredient</option>
-              {ingredients.map(ing => (
-                <option key={ing.id} value={ing.id}>{ing.name} ({ing.category})</option>
-              ))}
-            </select>
+        {selectedItems.map((item, index) => {
+          const ingredient = ingredients.find(i => i.id === item.ingredient_id);
+          const showConversion = ingredient && item.unit && ingredient.purchase_unit_type !== item.unit;
 
-            <input
-              type="number"
-              step="0.1"
-              value={item.amount_used}
-              onChange={e => handleChange(index, 'amount_used', e.target.value)}
-              placeholder="Amount"
-              style={{ ...styles.input, margin: 0, padding: '12px' }}
-            />
+          return (
+            <div key={index} style={{ marginBottom: '12px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: '12px', alignItems: 'center', padding: '16px', background: 'rgba(249, 250, 251, 0.5)', borderRadius: '12px' }}>
+                <select
+                  value={item.ingredient_id}
+                  onChange={e => handleChange(index, 'ingredient_id', e.target.value)}
+                  style={{ ...styles.input, margin: 0, padding: '12px' }}
+                >
+                  <option value="">Select Ingredient</option>
+                  {ingredients.map(ing => (
+                    <option key={ing.id} value={ing.id}>{ing.name} ({ing.category}) - {ing.purchase_unit_type}</option>
+                  ))}
+                </select>
 
-            <select
-              value={item.unit}
-              onChange={e => handleChange(index, 'unit', e.target.value)}
-              style={{ ...styles.input, margin: 0, padding: '12px' }}
-            >
-              <option value="ml">ml</option>
-              <option value="oz">oz</option>
-              <option value="g">g</option>
-              <option value="unit">unit</option>
-            </select>
+                <input
+                  type="number"
+                  step="0.1"
+                  value={item.amount_used}
+                  onChange={e => handleChange(index, 'amount_used', e.target.value)}
+                  placeholder="Amount"
+                  style={{ ...styles.input, margin: 0, padding: '12px' }}
+                />
 
-            {selectedItems.length > 1 && (
-              <button
-                onClick={() => removeIngredient(index)}
-                style={{ padding: '8px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer' }}
-              >
-                🗑️
-              </button>
-            )}
-          </div>
-        ))}
+                <select
+                  value={item.unit}
+                  onChange={e => handleChange(index, 'unit', e.target.value)}
+                  style={{ ...styles.input, margin: 0, padding: '12px' }}
+                >
+                  <option value="ml">ml</option>
+                  <option value="oz">oz</option>
+                  <option value="l">l</option>
+                  <option value="cl">cl</option>
+                  <option value="g">g</option>
+                  <option value="kg">kg</option>
+                  <option value="unit">unit</option>
+                </select>
+
+                {selectedItems.length > 1 && (
+                  <button
+                    onClick={() => removeIngredient(index)}
+                    style={{ padding: '8px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer' }}
+                  >
+                    🗑️
+                  </button>
+                )}
+              </div>
+
+              {showConversion && item.amount_used && (
+                <div style={{ marginTop: '8px', padding: '12px', background: 'rgba(59, 130, 246, 0.1)', borderRadius: '8px', fontSize: '0.875rem', color: '#1d4ed8' }}>
+                  💡 Auto-converting: {ingredient.purchase_unit_type} → {item.unit} | Cost: ฿{getUnitCostInTargetUnit(ingredient, item.unit).toFixed(4)} per {item.unit}
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', marginBottom: '32px' }}>
@@ -667,6 +759,14 @@ function RecipeBuilder({ ingredients, onRecipeSaved }) {
             <span style={{ fontSize: '0.875rem', color: '#7c3aed', fontWeight: '500' }}>servings</span>
           </div>
           <div style={{ ...styles.grid, ...styles.gridCols3 }}>
+            <div style={{ background: 'rgba(255, 255, 255, 0.6)', padding: '16px', borderRadius: '12px' }}>
+              <div style={{ fontWeight: 'bold', color: '#7c3aed', fontSize: '0.875rem' }}>Batch Total Cost</div>
+              <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#374151' }}>฿{(parseFloat(calculations.totalCost) * batchSize).toFixed(2)}</div>
+            </div>
+            <div style={{ background: 'rgba(255, 255, 255, 0.6)', padding: '16px', borderRadius: '12px' }}>
+              <div style={{ fontWeight: 'bold', color: '#7c3aed', fontSize: '0.875rem' }}>Revenue Potential</div>
+              <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#10b981' }}>฿{(parseFloat(calculations.suggestedPrice) * batchSize).toFixed(2)}</div>
+            </div>
             <div style={{ background: 'rgba(255, 255, 255, 0.6)', padding: '16px', borderRadius: '12px' }}>
               <div style={{ fontWeight: 'bold', color: '#7c3aed', fontSize: '0.875rem' }}>Batch Profit</div>
               <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#2563eb' }}>฿{((parseFloat(calculations.suggestedPrice) - parseFloat(calculations.totalCost)) * batchSize).toFixed(2)}</div>
@@ -702,6 +802,25 @@ function RecipeBuilder({ ingredients, onRecipeSaved }) {
               <div style={{ fontSize: '2rem', fontWeight: 'bold', color: '#9333ea', marginBottom: '8px' }}>{calculations.minPourCost}%</div>
               <div style={{ fontSize: '0.875rem', fontWeight: '600', color: '#6b7280' }}>Pour Cost @Target</div>
             </div>
+          </div>
+
+          {/* Ingredient Breakdown */}
+          <div style={{ background: 'rgba(255, 255, 255, 0.7)', padding: '24px', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.2)', marginBottom: '24px' }}>
+            <h4 style={{ fontWeight: 'bold', marginBottom: '16px', fontSize: '1.125rem', color: '#374151', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              🧾 Ingredient Cost Breakdown
+            </h4>
+            {calculations.ingredientBreakdown.map((item, index) => (
+              <div key={index} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', background: 'rgba(249, 250, 251, 0.5)', borderRadius: '8px', marginBottom: '8px' }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: '600', color: '#374151' }}>{item.name}</div>
+                  <div style={{ fontSize: '0.875rem', color: '#6b7280' }}>{item.amount} {item.unit} @ ฿{item.unitCost}/{item.unit.split(' ')[0]}</div>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontWeight: 'bold', color: '#10b981' }}>฿{item.cost}</div>
+                  <div style={{ fontSize: '0.875rem', color: '#6b7280' }}>{item.percentage}%</div>
+                </div>
+              </div>
+            ))}
           </div>
 
           <div style={{ background: 'rgba(255, 255, 255, 0.7)', padding: '24px', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.2)' }}>
@@ -814,6 +933,19 @@ function IngredientsList({ ingredients, onRefresh }) {
               <div style={{ fontWeight: 'bold', color: '#10b981', background: 'rgba(16, 185, 129, 0.1)', padding: '12px', borderRadius: '12px' }}>
                 ฿{(ingredient.purchase_price / ingredient.purchase_unit_qty).toFixed(4)} per {ingredient.purchase_unit_type}
               </div>
+
+              {/* Show common unit conversions */}
+              <div style={{ marginTop: '12px', padding: '12px', background: 'rgba(59, 130, 246, 0.1)', borderRadius: '12px' }}>
+                <div style={{ fontWeight: '600', color: '#1d4ed8', marginBottom: '8px' }}>Smart Conversions:</div>
+                {UNIT_CONVERSIONS[ingredient.purchase_unit_type]?.type === 'volume' && (
+                  <div style={{ fontSize: '0.75rem', color: '#1d4ed8' }}>
+                    ml: ฿{getUnitCostInTargetUnit(ingredient, 'ml').toFixed(4)} |
+                    oz: ฿{getUnitCostInTargetUnit(ingredient, 'oz').toFixed(4)} |
+                    cl: ฿{getUnitCostInTargetUnit(ingredient, 'cl').toFixed(4)}
+                  </div>
+                )}
+              </div>
+
               {ingredient.tags && ingredient.tags.length > 0 && (
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '12px' }}>
                   {ingredient.tags.map((tag, index) => (
