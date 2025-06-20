@@ -536,15 +536,22 @@ function RecipeBuilder({ ingredients, onRecipeSaved, editingRecipe, onCancelEdit
       setRecipeName(editingRecipe.name);
       setRecipeCategory(editingRecipe.category);
       setInstructions(editingRecipe.instructions || '');
+      setActualPrice(''); // Clear actual price when editing
 
-      // Load recipe ingredients
+      // Load recipe ingredients with proper data structure
       if (editingRecipe.recipe_ingredients && editingRecipe.recipe_ingredients.length > 0) {
         setSelectedItems(editingRecipe.recipe_ingredients.map(ri => ({
           ingredient_id: ri.ingredient_id,
-          amount_used: ri.amount_used,
+          amount_used: ri.amount_used.toString(), // Convert to string for form input
           unit: ri.unit_type
         })));
+      } else {
+        // If no ingredients, start with one empty row
+        setSelectedItems([{ ingredient_id: '', amount_used: '', unit: 'ml' }]);
       }
+
+      // Clear calculations when starting to edit
+      setCalculations(null);
     } else {
       // Clear form for new recipe
       setRecipeName('');
@@ -552,6 +559,7 @@ function RecipeBuilder({ ingredients, onRecipeSaved, editingRecipe, onCancelEdit
       setInstructions('');
       setSelectedItems([{ ingredient_id: '', amount_used: '', unit: 'ml' }]);
       setCalculations(null);
+      setActualPrice('');
     }
   }, [editingRecipe]);
 
@@ -741,10 +749,10 @@ function RecipeBuilder({ ingredients, onRecipeSaved, editingRecipe, onCancelEdit
             WebkitBackgroundClip: 'text',
             WebkitTextFillColor: 'transparent'
           }}>
-            {editingRecipe ? `Edit Recipe: ${editingRecipe.name}` : 'Recipe Builder & Cost Calculator'}
+            {editingRecipe ? `✏️ Editing: ${editingRecipe.name}` : 'Recipe Builder & Cost Calculator'}
           </h2>
           <p style={styles.cardSubtitle}>
-            {editingRecipe ? 'Modify your saved recipe' : 'Create and analyze beverage recipes'} • MargaritaHotSauceLLC
+            {editingRecipe ? 'Edit ingredients, amounts, instructions - all aspects are editable' : 'Create and analyze beverage recipes'} • MargaritaHotSauceLLC
           </p>
         </div>
         <div style={{ display: 'flex', gap: '12px' }}>
