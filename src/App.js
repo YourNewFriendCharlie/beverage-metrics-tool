@@ -1,10 +1,11 @@
-<button onClick={saveRecipe} disabled={isSubmitting} style={{...styles.button, fontSize: '0.875rem', padding: '12px 20px'}}>
+<div style={{
+  ...styles.grid, gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '          <button onClick={saveRecipe} disabled={isSubmitting} style={{...styles.button, fontSize: '0.875rem', padding: '12px 20px'}}>
             💾 {editingRecipe ? 'Update Recipe' : 'Save Recipe'}
-          </button>
-          <button onClick={exportRecipe} disabled={!calculations} style={{...styles.buttonSecondary, ...styles.button, fontSize: '0.875rem'}}>
-            📥 Export
-          </button>
-        </div >
+          </ button>
+  <button onClick={exportRecipe} disabled={!calculations} style={{ ...styles.buttonSecondary, ...styles.button, fontSize: '0.875rem' }}>
+    📥 Export
+  </button>
+</div>
       </div >
 
       <div style={{...styles.message, ...styles.messageInfo, marginBottom: '24px'}}>
@@ -73,7 +74,6 @@
                   <option value="ml">ml</option>
                   <option value="oz">oz</option>
                   <option value="l">l</option>
-                  <option value="cl">cl</option>
                   <option value="g">g</option>
                   <option value="kg">kg</option>
                   <option value="unit">unit</option>
@@ -178,7 +178,133 @@
         </div>
       </div>
 
-      {/* Ingredient Breakdown */}
+      {/* Actual Price Analysis Row */}
+      <div style={{ background: 'rgba(236, 72, 153, 0.1)', border: '1px solid rgba(236, 72, 153, 0.2)', borderRadius: '16px', padding: '24px', marginBottom: '32px' }}>
+        <h4 style={{ fontWeight: 'bold', marginBottom: '16px', fontSize: '1.125rem', color: '#be185d', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          💰 Actual Price Analysis
+        </h4>
+        <div style={{ ...styles.grid, gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '24px' }}>
+          {/* Input Actual Price */}
+          <div style={{ background: 'rgba(255, 255, 255, 0.8)', padding: '24px', borderRadius: '16px', border: '2px solid rgba(236, 72, 153, 0.3)', textAlign: 'center' }}>
+            <div style={{ fontSize: '0.875rem', fontWeight: '600', color: '#be185d', marginBottom: '8px' }}>Your Menu Price</div>
+            <input
+              type="number"
+              step="0.01"
+              value={actualPrice}
+              onChange={(e) => setActualPrice(e.target.value)}
+              placeholder="Enter price ฿"
+              style={{
+                ...styles.input,
+                textAlign: 'center',
+                fontSize: '1.5rem',
+                fontWeight: 'bold',
+                color: '#be185d',
+                background: 'rgba(255, 255, 255, 0.9)',
+                border: '2px solid rgba(236, 72, 153, 0.3)',
+                margin: 0,
+                padding: '12px'
+              }}
+            />
+          </div>
+
+          {/* Actual Gross Margin */}
+          {actualPrice && parseFloat(actualPrice) > 0 && (
+            <>
+              <div style={{ background: 'rgba(255, 255, 255, 0.7)', padding: '24px', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.2)', textAlign: 'center', transition: 'transform 0.3s ease' }}>
+                <div style={{
+                  fontSize: '2rem',
+                  fontWeight: 'bold',
+                  color: ((parseFloat(actualPrice) - parseFloat(calculations.totalCost)) / parseFloat(actualPrice) * 100) >= parseFloat(calculations.margin) ? '#10b981' : '#ef4444',
+                  marginBottom: '8px'
+                }}>
+                  {((parseFloat(actualPrice) - parseFloat(calculations.totalCost)) / parseFloat(actualPrice) * 100).toFixed(1)}%
+                </div>
+                <div style={{ fontSize: '0.875rem', fontWeight: '600', color: '#6b7280' }}>Actual Margin</div>
+                <div style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '4px' }}>
+                  Target: {calculations.margin}%
+                </div>
+              </div>
+
+              {/* Actual Pour Cost */}
+              <div style={{ background: 'rgba(255, 255, 255, 0.7)', padding: '24px', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.2)', textAlign: 'center', transition: 'transform 0.3s ease' }}>
+                <div style={{
+                  fontSize: '2rem',
+                  fontWeight: 'bold',
+                  color: (parseFloat(calculations.totalCost) / parseFloat(actualPrice) * 100) <= parseFloat(calculations.minPourCost) ? '#10b981' : '#ef4444',
+                  marginBottom: '8px'
+                }}>
+                  {(parseFloat(calculations.totalCost) / parseFloat(actualPrice) * 100).toFixed(1)}%
+                </div>
+                <div style={{ fontSize: '0.875rem', fontWeight: '600', color: '#6b7280' }}>Actual Pour Cost</div>
+                <div style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '4px' }}>
+                  Target: {calculations.minPourCost}%
+                </div>
+              </div>
+
+              {/* Profit per Item */}
+              <div style={{ background: 'rgba(255, 255, 255, 0.7)', padding: '24px', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.2)', textAlign: 'center', transition: 'transform 0.3s ease' }}>
+                <div style={{
+                  fontSize: '2rem',
+                  fontWeight: 'bold',
+                  color: (parseFloat(actualPrice) - parseFloat(calculations.totalCost)) > 0 ? '#10b981' : '#ef4444',
+                  marginBottom: '8px'
+                }}>
+                  ฿{(parseFloat(actualPrice) - parseFloat(calculations.totalCost)).toFixed(2)}
+                </div>
+                <div style={{ fontSize: '0.875rem', fontWeight: '600', color: '#6b7280' }}>Profit per Item</div>
+                <div style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '4px' }}>
+                  Suggested: ฿{(parseFloat(calculations.suggestedPrice) - parseFloat(calculations.totalCost)).toFixed(2)}
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Performance Indicators */}
+        {actualPrice && parseFloat(actualPrice) > 0 && (
+          <div style={{ marginTop: '16px', padding: '16px', background: 'rgba(255, 255, 255, 0.6)', borderRadius: '12px', display: 'flex', gap: '16px', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap' }}>
+            <div style={{
+              padding: '8px 16px',
+              borderRadius: '20px',
+              fontSize: '0.875rem',
+              fontWeight: '600',
+              background: ((parseFloat(actualPrice) - parseFloat(calculations.totalCost)) / parseFloat(actualPrice) * 100) >= parseFloat(calculations.margin) ?
+                'linear-gradient(135deg, #10b981, #059669)' : 'linear-gradient(135deg, #ef4444, #dc2626)',
+              color: 'white'
+            }}>
+              {((parseFloat(actualPrice) - parseFloat(calculations.totalCost)) / parseFloat(actualPrice) * 100) >= parseFloat(calculations.margin) ?
+                '✅ Margin Target Met' : '⚠️ Below Margin Target'}
+            </div>
+
+            <div style={{
+              padding: '8px 16px',
+              borderRadius: '20px',
+              fontSize: '0.875rem',
+              fontWeight: '600',
+              background: (parseFloat(calculations.totalCost) / parseFloat(actualPrice) * 100) <= parseFloat(calculations.minPourCost) ?
+                'linear-gradient(135deg, #10b981, #059669)' : 'linear-gradient(135deg, #ef4444, #dc2626)',
+              color: 'white'
+            }}>
+              {(parseFloat(calculations.totalCost) / parseFloat(actualPrice) * 100) <= parseFloat(calculations.minPourCost) ?
+                '✅ Pour Cost Good' : '⚠️ Pour Cost High'}
+            </div>
+
+            <div style={{
+              padding: '8px 16px',
+              borderRadius: '20px',
+              fontSize: '0.875rem',
+              fontWeight: '600',
+              background: parseFloat(actualPrice) >= parseFloat(calculations.suggestedPrice) ?
+                'linear-gradient(135deg, #10b981, #059669)' : 'linear-gradient(135deg, #f59e0b, #ea580c)',
+              color: 'white'
+            }}>
+              {parseFloat(actualPrice) >= parseFloat(calculations.suggestedPrice) ?
+                '💰 Above Suggested' : '💡 Could Increase'}
+            </div>
+          </div>
+        )}
+      </div>
+
       <div style={{ background: 'rgba(255, 255, 255, 0.7)', padding: '24px', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.2)', marginBottom: '24px' }}>
         <h4 style={{ fontWeight: 'bold', marginBottom: '16px', fontSize: '1.125rem', color: '#374151', display: 'flex', alignItems: 'center', gap: '8px' }}>
           🧾 Ingredient Cost Breakdown
@@ -217,6 +343,10 @@
 function IngredientsList({ ingredients, onRefresh }) {
   const [filter, setFilter] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('All');
+  const [editingIngredient, setEditingIngredient] = useState(null);
+  const [editForm, setEditForm] = useState({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [message, setMessage] = useState({ type: '', text: '' });
 
   const filteredIngredients = ingredients.filter(ingredient => {
     const matchesName = ingredient.name.toLowerCase().includes(filter.toLowerCase());
@@ -233,11 +363,95 @@ function IngredientsList({ ingredients, onRefresh }) {
       quantity: ing.purchase_unit_qty,
       unit: ing.purchase_unit_type,
       price: ing.purchase_price,
+      supplier: ing.supplier || '',
       costPerUnit: (ing.purchase_price / ing.purchase_unit_qty).toFixed(4),
       tags: ing.tags ? ing.tags.join(', ') : ''
     }));
 
     exportToCSV(exportData, 'ingredients_inventory.csv');
+  };
+
+  const handleEditClick = (ingredient) => {
+    setEditingIngredient(ingredient.id);
+    setEditForm({
+      name: ingredient.name,
+      purchase_unit_qty: ingredient.purchase_unit_qty,
+      purchase_unit_type: ingredient.purchase_unit_type,
+      purchase_price: ingredient.purchase_price,
+      category: ingredient.category,
+      supplier: ingredient.supplier || '',
+      tags: ingredient.tags ? ingredient.tags.join(', ') : ''
+    });
+    setMessage({ type: '', text: '' });
+  };
+
+  const handleCancelEdit = () => {
+    setEditingIngredient(null);
+    setEditForm({});
+    setMessage({ type: '', text: '' });
+  };
+
+  const handleFormChange = (field, value) => {
+    setEditForm(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleSaveEdit = async () => {
+    setIsSubmitting(true);
+    setMessage({ type: '', text: '' });
+
+    try {
+      if (!editForm.name.trim() || !editForm.purchase_unit_qty || !editForm.purchase_price) {
+        throw new Error('Please fill all required fields');
+      }
+
+      const tagsArray = editForm.tags.split(',').map(t => t.trim()).filter(t => t);
+      const updateData = {
+        name: editForm.name.trim(),
+        purchase_unit_qty: parseFloat(editForm.purchase_unit_qty),
+        purchase_unit_type: editForm.purchase_unit_type,
+        purchase_price: parseFloat(editForm.purchase_price),
+        category: editForm.category,
+        supplier: editForm.supplier.trim(),
+        tags: tagsArray,
+        date_updated: new Date().toISOString()
+      };
+
+      const { error } = await supabase
+        .from('ingredients')
+        .update(updateData)
+        .eq('id', editingIngredient);
+
+      if (error) throw error;
+
+      setMessage({ type: 'success', text: `✅ "${editForm.name}" updated successfully!` });
+      setEditingIngredient(null);
+      setEditForm({});
+      if (onRefresh) onRefresh();
+    } catch (err) {
+      setMessage({ type: 'error', text: `❌ Error: ${err.message}` });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDeleteIngredient = async (ingredient) => {
+    if (!window.confirm(`Are you sure you want to delete "${ingredient.name}"? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('ingredients')
+        .delete()
+        .eq('id', ingredient.id);
+
+      if (error) throw error;
+
+      alert(`🗑️ "${ingredient.name}" deleted successfully!`);
+      if (onRefresh) onRefresh();
+    } catch (err) {
+      alert(`❌ Error deleting ingredient: ${err.message}`);
+    }
   };
 
   return (
@@ -262,6 +476,19 @@ function IngredientsList({ ingredients, onRefresh }) {
         </div>
       </div>
 
+      {message.text && (
+        <div style={{
+          ...styles.message,
+          ...(message.type === 'success' ? styles.messageSuccess : styles.messageError)
+        }}>
+          {message.text}
+        </div>
+      )}
+
+      <div style={{ ...styles.message, ...styles.messageInfo, marginBottom: '32px' }}>
+        ✏️ <strong>Click any ingredient</strong> to edit prices, supplier info, or details. Perfect for updating costs from new invoices!
+      </div>
+
       <div style={{ display: 'flex', gap: '24px', marginBottom: '32px' }}>
         <div style={{ position: 'relative', flex: 1 }}>
           <span style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: '#9ca3af' }}>🔍</span>
@@ -284,60 +511,228 @@ function IngredientsList({ ingredients, onRefresh }) {
 
       <div style={{ ...styles.grid, gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '24px' }}>
         {filteredIngredients.map(ingredient => (
-          <div key={ingredient.id} style={{ ...styles.ingredientCard, cursor: 'pointer' }} onMouseEnter={(e) => e.target.style.transform = 'scale(1.02)'} onMouseLeave={(e) => e.target.style.transform = 'scale(1)'}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
-              <h3 style={{ fontWeight: 'bold', color: '#374151', fontSize: '1.125rem', margin: 0, flex: 1 }}>{ingredient.name}</h3>
-              <span style={{
-                ...styles.badge,
-                background: ingredient.category === 'Spirit' ? 'linear-gradient(135deg, #ef4444, #dc2626)' :
-                  ingredient.category === 'Classic Cocktails' ? 'linear-gradient(135deg, #f59e0b, #ea580c)' :
-                    ingredient.category === 'House Cocktails' ? 'linear-gradient(135deg, #9333ea, #7c3aed)' :
-                      ingredient.category === 'Wine' ? 'linear-gradient(135deg, #9333ea, #ec4899)' :
-                        ingredient.category === 'Beer' ? 'linear-gradient(135deg, #f59e0b, #d97706)' :
-                          ingredient.category === 'Coffee' ? 'linear-gradient(135deg, #d97706, #92400e)' :
-                            'linear-gradient(135deg, #2563eb, #1d4ed8)'
-              }}>
-                {ingredient.category}
-              </span>
-            </div>
-
-            <div style={{ fontSize: '0.875rem', color: '#6b7280', lineHeight: '1.5' }}>
-              <div style={{ background: 'rgba(249, 250, 251, 0.5)', padding: '12px', borderRadius: '12px', marginBottom: '12px' }}>
-                <div style={{ fontWeight: '500' }}>฿{ingredient.purchase_price} per {ingredient.purchase_unit_qty}{ingredient.purchase_unit_type}</div>
-              </div>
-              <div style={{ fontWeight: 'bold', color: '#10b981', background: 'rgba(16, 185, 129, 0.1)', padding: '12px', borderRadius: '12px' }}>
-                ฿{(ingredient.purchase_price / ingredient.purchase_unit_qty).toFixed(4)} per {ingredient.purchase_unit_type}
-              </div>
-
-              {/* Show common unit conversions */}
-              <div style={{ marginTop: '12px', padding: '12px', background: 'rgba(59, 130, 246, 0.1)', borderRadius: '12px' }}>
-                <div style={{ fontWeight: '600', color: '#1d4ed8', marginBottom: '8px' }}>Smart Conversions:</div>
-                {UNIT_CONVERSIONS[ingredient.purchase_unit_type]?.type === 'volume' && (
-                  <div style={{ fontSize: '0.75rem', color: '#1d4ed8' }}>
-                    ml: ฿{getUnitCostInTargetUnit(ingredient, 'ml').toFixed(4)} |
-                    oz: ฿{getUnitCostInTargetUnit(ingredient, 'oz').toFixed(4)} |
-                    cl: ฿{getUnitCostInTargetUnit(ingredient, 'cl').toFixed(4)}
-                  </div>
-                )}
-              </div>
-
-              {ingredient.tags && ingredient.tags.length > 0 && (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '12px' }}>
-                  {ingredient.tags.map((tag, index) => (
-                    <span key={index} style={{
-                      background: 'linear-gradient(135deg, #e5e7eb, #d1d5db)',
-                      color: '#374151',
-                      padding: '4px 12px',
-                      borderRadius: '9999px',
-                      fontSize: '0.75rem',
-                      fontWeight: '500'
-                    }}>
-                      {tag}
-                    </span>
-                  ))}
+          <div key={ingredient.id}>
+            {editingIngredient === ingredient.id ? (
+              // Edit Mode
+              <div style={{ ...styles.ingredientCard, border: '2px solid #9333ea', background: 'rgba(147, 51, 234, 0.05)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                  <h3 style={{ fontWeight: 'bold', color: '#9333ea', fontSize: '1.125rem', margin: 0 }}>
+                    ✏️ Editing: {ingredient.name}
+                  </h3>
+                  <button onClick={handleCancelEdit} style={{ ...styles.buttonSecondary, ...styles.buttonSmall, padding: '4px 8px' }}>
+                    ❌
+                  </button>
                 </div>
-              )}
-            </div>
+
+                <div style={{ ...styles.grid, gap: '16px' }}>
+                  <input
+                    value={editForm.name}
+                    onChange={(e) => handleFormChange('name', e.target.value)}
+                    placeholder="Ingredient Name"
+                    style={{ ...styles.input, margin: 0, padding: '12px' }}
+                  />
+
+                  <div style={{ ...styles.grid, ...styles.gridCols3 }}>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={editForm.purchase_unit_qty}
+                      onChange={(e) => handleFormChange('purchase_unit_qty', e.target.value)}
+                      placeholder="Quantity"
+                      style={{ ...styles.input, margin: 0, padding: '12px' }}
+                    />
+
+                    <select
+                      value={editForm.purchase_unit_type}
+                      onChange={(e) => handleFormChange('purchase_unit_type', e.target.value)}
+                      style={{ ...styles.input, margin: 0, padding: '12px' }}
+                    >
+                      {['ml', 'oz', 'l', 'unit', 'bottle', 'can', 'kg', 'g', 'lb'].map(unit =>
+                        <option key={unit} value={unit}>{unit}</option>
+                      )}
+                    </select>
+
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={editForm.purchase_price}
+                      onChange={(e) => handleFormChange('purchase_price', e.target.value)}
+                      placeholder="Price ฿"
+                      style={{ ...styles.input, margin: 0, padding: '12px' }}
+                    />
+                  </div>
+
+                  <div style={{ ...styles.grid, ...styles.gridCols2 }}>
+                    <select
+                      value={editForm.category}
+                      onChange={(e) => handleFormChange('category', e.target.value)}
+                      style={{ ...styles.input, margin: 0, padding: '12px' }}
+                    >
+                      {Object.keys(CATEGORY_TARGETS).map(cat =>
+                        <option key={cat} value={cat}>{cat}</option>
+                      )}
+                    </select>
+
+                    <input
+                      value={editForm.supplier}
+                      onChange={(e) => handleFormChange('supplier', e.target.value)}
+                      placeholder="Supplier name"
+                      style={{ ...styles.input, margin: 0, padding: '12px' }}
+                    />
+                  </div>
+
+                  <input
+                    value={editForm.tags}
+                    onChange={(e) => handleFormChange('tags', e.target.value)}
+                    placeholder="Tags: premium, imported, organic"
+                    style={{ ...styles.input, margin: 0, padding: '12px' }}
+                  />
+
+                  <div style={{ display: 'flex', gap: '12px', marginTop: '16px' }}>
+                    <button
+                      onClick={handleSaveEdit}
+                      disabled={isSubmitting}
+                      style={{
+                        ...styles.button,
+                        fontSize: '0.875rem',
+                        flex: 1,
+                        ...(isSubmitting && { background: '#9ca3af', cursor: 'not-allowed' })
+                      }}
+                    >
+                      {isSubmitting ? '🔄 Saving...' : '💾 Save Changes'}
+                    </button>
+                    <button
+                      onClick={() => handleDeleteIngredient(ingredient)}
+                      style={{
+                        ...styles.button,
+                        background: 'linear-gradient(135deg, #ef4444, #dc2626)',
+                        fontSize: '0.875rem',
+                        padding: '12px 16px'
+                      }}
+                    >
+                      🗑️ Delete
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              // View Mode
+              <div
+                style={{
+                  ...styles.ingredientCard,
+                  cursor: 'pointer',
+                  border: '2px solid rgba(255, 255, 255, 0.2)',
+                  transition: 'all 0.3s ease'
+                }}
+                onClick={() => handleEditClick(ingredient)}
+                onMouseEnter={(e) => {
+                  e.target.style.transform = 'scale(1.02)';
+                  e.target.style.border = '2px solid rgba(147, 51, 234, 0.4)';
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.transform = 'scale(1)';
+                  e.target.style.border = '2px solid rgba(255, 255, 255, 0.2)';
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
+                  <h3 style={{ fontWeight: 'bold', color: '#374151', fontSize: '1.125rem', margin: 0, flex: 1 }}>{ingredient.name}</h3>
+                  <span style={{
+                    ...styles.badge,
+                    background: ingredient.category === 'Spirit' ? 'linear-gradient(135deg, #ef4444, #dc2626)' :
+                      ingredient.category === 'Classic Cocktails' ? 'linear-gradient(135deg, #f59e0b, #ea580c)' :
+                        ingredient.category === 'House Cocktails' ? 'linear-gradient(135deg, #9333ea, #7c3aed)' :
+                          ingredient.category === 'Wine' ? 'linear-gradient(135deg, #9333ea, #ec4899)' :
+                            ingredient.category === 'Beer' ? 'linear-gradient(135deg, #f59e0b, #d97706)' :
+                              ingredient.category === 'Coffee' ? 'linear-gradient(135deg, #d97706, #92400e)' :
+                                'linear-gradient(135deg, #2563eb, #1d4ed8)'
+                  }}>
+                    {ingredient.category}
+                  </span>
+                </div>
+
+                <div style={{ fontSize: '0.875rem', color: '#6b7280', lineHeight: '1.5' }}>
+                  <div style={{ background: 'rgba(249, 250, 251, 0.5)', padding: '12px', borderRadius: '12px', marginBottom: '12px' }}>
+                    <div style={{ fontWeight: '500' }}>฿{ingredient.purchase_price} per {ingredient.purchase_unit_qty}{ingredient.purchase_unit_type}</div>
+                    {ingredient.supplier && (
+                      <div style={{ fontSize: '0.75rem', color: '#9ca3af', marginTop: '4px' }}>
+                        Supplier: {ingredient.supplier}
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ fontWeight: 'bold', color: '#10b981', background: 'rgba(16, 185, 129, 0.1)', padding: '12px', borderRadius: '12px' }}>
+                    ฿{(ingredient.purchase_price / ingredient.purchase_unit_qty).toFixed(4)} per {ingredient.purchase_unit_type}
+                  </div>
+
+                  <div style={{ marginTop: '12px', padding: '12px', background: 'rgba(59, 130, 246, 0.1)', borderRadius: '12px' }}>
+                    <div style={{ fontWeight: '600', color: '#1d4ed8', marginBottom: '8px' }}>Smart Conversions:</div>
+                    {/* Show industry-specific conversions based on category */}
+                    {(ingredient.category === 'Spirit' || ingredient.category === 'Liqueur') && UNIT_CONVERSIONS[ingredient.purchase_unit_type]?.type === 'volume' && (
+                      <div style={{ fontSize: '0.75rem', color: '#1d4ed8' }}>
+                        ml: ฿{getUnitCostInTargetUnit(ingredient, 'ml').toFixed(4)} |
+                        oz: ฿{getUnitCostInTargetUnit(ingredient, 'oz').toFixed(4)} |
+                        L: ฿{getUnitCostInTargetUnit(ingredient, 'l').toFixed(2)}
+                      </div>
+                    )}
+                    {ingredient.category === 'Wine' && UNIT_CONVERSIONS[ingredient.purchase_unit_type]?.type === 'volume' && (
+                      <div style={{ fontSize: '0.75rem', color: '#1d4ed8' }}>
+                        5oz: ฿{(getUnitCostInTargetUnit(ingredient, 'oz') * 5).toFixed(2)} |
+                        8oz: ฿{(getUnitCostInTargetUnit(ingredient, 'oz') * 8).toFixed(2)} |
+                        bottle: ฿{getUnitCostInTargetUnit(ingredient, 'bottle').toFixed(2)}
+                      </div>
+                    )}
+                    {ingredient.category === 'Beer' && UNIT_CONVERSIONS[ingredient.purchase_unit_type]?.type === 'volume' && (
+                      <div style={{ fontSize: '0.75rem', color: '#1d4ed8' }}>
+                        12oz: ฿{(getUnitCostInTargetUnit(ingredient, 'oz') * 12).toFixed(2)} |
+                        16oz: ฿{(getUnitCostInTargetUnit(ingredient, 'oz') * 16).toFixed(2)} |
+                        bottle: ฿{getUnitCostInTargetUnit(ingredient, 'bottle').toFixed(2)}
+                      </div>
+                    )}
+                    {(ingredient.category === 'Coffee' || ingredient.category === 'Tea') && UNIT_CONVERSIONS[ingredient.purchase_unit_type]?.type === 'weight' && (
+                      <div style={{ fontSize: '0.75rem', color: '#1d4ed8' }}>
+                        g: ฿{getUnitCostInTargetUnit(ingredient, 'g').toFixed(4)} |
+                        oz: ฿{getUnitCostInTargetUnit(ingredient, 'oz').toFixed(4)} |
+                        kg: ฿{getUnitCostInTargetUnit(ingredient, 'kg').toFixed(2)}
+                      </div>
+                    )}
+                    {(ingredient.category === 'Juice' || ingredient.category === 'Mixer' || ingredient.category === 'Non-Alc') && UNIT_CONVERSIONS[ingredient.purchase_unit_type]?.type === 'volume' && (
+                      <div style={{ fontSize: '0.75rem', color: '#1d4ed8' }}>
+                        ml: ฿{getUnitCostInTargetUnit(ingredient, 'ml').toFixed(4)} |
+                        oz: ฿{getUnitCostInTargetUnit(ingredient, 'oz').toFixed(4)} |
+                        L: ฿{getUnitCostInTargetUnit(ingredient, 'l').toFixed(2)}
+                      </div>
+                    )}
+                    {(ingredient.category === 'Classic Cocktails' || ingredient.category === 'House Cocktails') && UNIT_CONVERSIONS[ingredient.purchase_unit_type]?.type === 'volume' && (
+                      <div style={{ fontSize: '0.75rem', color: '#1d4ed8' }}>
+                        ml: ฿{getUnitCostInTargetUnit(ingredient, 'ml').toFixed(4)} |
+                        oz: ฿{getUnitCostInTargetUnit(ingredient, 'oz').toFixed(4)} |
+                        L: ฿{getUnitCostInTargetUnit(ingredient, 'l').toFixed(2)}
+                      </div>
+                    )}
+                  </div>
+
+                  {ingredient.tags && ingredient.tags.length > 0 && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '12px' }}>
+                      {ingredient.tags.map((tag, index) => (
+                        <span key={index} style={{
+                          background: 'linear-gradient(135deg, #e5e7eb, #d1d5db)',
+                          color: '#374151',
+                          padding: '4px 12px',
+                          borderRadius: '9999px',
+                          fontSize: '0.75rem',
+                          fontWeight: '500'
+                        }}>
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  <div style={{ marginTop: '12px', padding: '8px 12px', background: 'rgba(147, 51, 234, 0.1)', borderRadius: '8px', fontSize: '0.75rem', color: '#7c3aed', fontWeight: '600', textAlign: 'center' }}>
+                    Click to edit
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         ))}
       </div>
@@ -350,10 +745,69 @@ function IngredientsList({ ingredients, onRefresh }) {
         </div>
       )}
     </div>
+  ); '0.75rem', color: '#1d4ed8'
+}}>
+  g: ฿{ getUnitCostInTargetUnit(ingredient, 'g').toFixed(4) } |
+    oz: ฿{ getUnitCostInTargetUnit(ingredient, 'oz').toFixed(4) } |
+      kg: ฿{ getUnitCostInTargetUnit(ingredient, 'kg').toFixed(2) }
+                  </div >
+                )}
+{
+  (ingredient.category === 'Juice' || ingredient.category === 'Mixer' || ingredient.category === 'Non-Alc') && UNIT_CONVERSIONS[ingredient.purchase_unit_type]?.type === 'volume' && (
+    <div style={{ fontSize: '0.75rem', color: '#1d4ed8' }}>
+      ml: ฿{getUnitCostInTargetUnit(ingredient, 'ml').toFixed(4)} |
+      oz: ฿{getUnitCostInTargetUnit(ingredient, 'oz').toFixed(4)} |
+      L: ฿{getUnitCostInTargetUnit(ingredient, 'l').toFixed(2)}
+    </div>
+  )
+}
+{
+  (ingredient.category === 'Classic Cocktails' || ingredient.category === 'House Cocktails') && UNIT_CONVERSIONS[ingredient.purchase_unit_type]?.type === 'volume' && (
+    <div style={{ fontSize: '0.75rem', color: '#1d4ed8' }}>
+      ml: ฿{getUnitCostInTargetUnit(ingredient, 'ml').toFixed(4)} |
+      oz: ฿{getUnitCostInTargetUnit(ingredient, 'oz').toFixed(4)} |
+      L: ฿{getUnitCostInTargetUnit(ingredient, 'l').toFixed(2)}
+    </div>
+  )
+}
+              </div >
+
+{
+  ingredient.tags && ingredient.tags.length > 0 && (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '12px' }}>
+      {ingredient.tags.map((tag, index) => (
+        <span key={index} style={{
+          background: 'linear-gradient(135deg, #e5e7eb, #d1d5db)',
+          color: '#374151',
+          padding: '4px 12px',
+          borderRadius: '9999px',
+          fontSize: '0.75rem',
+          fontWeight: '500'
+        }}>
+          {tag}
+        </span>
+      ))}
+    </div>
+  )
+}
+            </div >
+          </div >
+        ))}
+      </div >
+
+{
+  filteredIngredients.length === 0 && (
+    <div style={{ textAlign: 'center', padding: '64px 0', color: '#6b7280' }}>
+      <MartiniIcon size={64} />
+      <p style={{ fontSize: '1.25rem', fontWeight: '500', margin: '24px 0 8px' }}>No ingredients found matching your search.</p>
+      <p style={{ fontSize: '0.875rem', margin: 0 }}>Try adjusting your search terms or category filter.</p>
+    </div>
+  )
+}
+    </div >
   );
 }
 
-// Recipe Detail Modal Component
 function RecipeDetailModal({ recipe, ingredients, onClose, onEdit, onDelete }) {
   const [recipeIngredients, setRecipeIngredients] = useState([]);
   const [calculations, setCalculations] = useState(null);
@@ -379,7 +833,6 @@ function RecipeDetailModal({ recipe, ingredients, onClose, onEdit, onDelete }) {
     fetchRecipeIngredients();
   }, [recipe]);
 
-  // Calculate costs when ingredients are loaded
   useEffect(() => {
     if (recipeIngredients.length > 0 && ingredients.length > 0) {
       calculateRecipeCost();
@@ -428,13 +881,11 @@ function RecipeDetailModal({ recipe, ingredients, onClose, onEdit, onDelete }) {
 
     setIsDeleting(true);
     try {
-      // Delete recipe ingredients first
       await supabase
         .from('recipe_ingredients')
         .delete()
         .eq('recipe_id', recipe.id);
 
-      // Then delete the recipe
       const { error } = await supabase
         .from('recipes')
         .delete()
@@ -571,7 +1022,6 @@ function SavedRecipes({ recipes, ingredients, onRecipeUpdated }) {
 
   const handleRecipeClick = async (recipe) => {
     try {
-      // Fetch recipe with ingredients
       const { data: recipeIngredients, error } = await supabase
         .from('recipe_ingredients')
         .select('*')
@@ -612,7 +1062,6 @@ function SavedRecipes({ recipes, ingredients, onRecipeUpdated }) {
     if (onRecipeUpdated) onRecipeUpdated();
   };
 
-  // If editing, show the recipe builder
   if (editingRecipe) {
     return (
       <RecipeBuilder
@@ -747,7 +1196,6 @@ function SavedRecipes({ recipes, ingredients, onRecipeUpdated }) {
         )}
       </div>
 
-      {/* Recipe Detail Modal */}
       {selectedRecipe && (
         <RecipeDetailModal
           recipe={selectedRecipe}
@@ -840,8 +1288,7 @@ function App() {
   );
 }
 
-export default App;
-import React, { useState, useEffect } from 'react';
+export default App; import React, { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 
 // Initialize Supabase client
@@ -855,17 +1302,16 @@ function MartiniIcon({ size = 32 }) {
   return <span style={{ fontSize: `${size}px` }}>🍸</span>;
 }
 
-// Unit conversion system
+// Unit conversion system - Industry best practices, no cl (too small)
 const UNIT_CONVERSIONS = {
   // Volume conversions (base: ml)
   'ml': { toBase: 1, type: 'volume' },
   'l': { toBase: 1000, type: 'volume' },
-  'cl': { toBase: 10, type: 'volume' },
   'oz': { toBase: 29.5735, type: 'volume' },
   'bottle': { toBase: 750, type: 'volume' }, // Standard wine bottle
   'can': { toBase: 330, type: 'volume' }, // Standard beer can
 
-  // Weight conversions (base: g)
+  // Weight conversions (base: g) 
   'g': { toBase: 1, type: 'weight' },
   'kg': { toBase: 1000, type: 'weight' },
   'lb': { toBase: 453.592, type: 'weight' },
@@ -1174,7 +1620,7 @@ function AddIngredientForm({ onIngredientAdded }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
 
-  const unitTypes = ['ml', 'oz', 'l', 'cl', 'unit', 'bottle', 'can', 'kg', 'g', 'lb'];
+  const unitTypes = ['ml', 'oz', 'l', 'unit', 'bottle', 'can', 'kg', 'g', 'lb'];
   const categories = Object.keys(CATEGORY_TARGETS);
 
   const handleInputChange = (e) => {
@@ -1198,6 +1644,7 @@ function AddIngredientForm({ onIngredientAdded }) {
         purchase_unit_type: formData.purchase_unit_type,
         purchase_price: parseFloat(formData.purchase_price),
         category: formData.category,
+        supplier: formData.supplier.trim(),
         tags: tagsArray,
         date_updated: new Date().toISOString()
       };
@@ -1295,13 +1742,21 @@ function AddIngredientForm({ onIngredientAdded }) {
           </select>
 
           <input
-            name="tags"
-            value={formData.tags}
+            name="supplier"
+            value={formData.supplier}
             onChange={handleInputChange}
-            placeholder="Tags: premium, imported, organic"
+            placeholder="Supplier name"
             style={styles.input}
           />
         </div>
+
+        <input
+          name="tags"
+          value={formData.tags}
+          onChange={handleInputChange}
+          placeholder="Tags: premium, imported, organic"
+          style={styles.input}
+        />
 
         {costPerUnit > 0 && (
           <div style={styles.costDisplay}>
@@ -1342,6 +1797,7 @@ function RecipeBuilder({ ingredients, onRecipeSaved, editingRecipe, onCancelEdit
   const [showBatchTool, setShowBatchTool] = useState(false);
   const [batchSize, setBatchSize] = useState(10);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [actualPrice, setActualPrice] = useState(''); // New state for actual price analysis
 
   // Load recipe data when editing
   useEffect(() => {
@@ -1556,4 +2012,4 @@ function RecipeBuilder({ ingredients, onRecipeSaved, editingRecipe, onCancelEdit
               ❌ Cancel Edit
             </button>
           )}
-          <button onClick={saveRecipe} disabled={isSubmitting} style
+          <button onClick={saveRecipe} disabled={isSubmitting} style={{ ...
