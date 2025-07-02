@@ -12,22 +12,35 @@ function MartiniIcon({ size = 32 }) {
   return <span style={{ fontSize: `${size}px` }}>🍸</span>;
 }
 
-// Unit conversion system - Industry best practices, no cl (too small)
+// Unit conversion system - Industry best practices, comprehensive units
 const UNIT_CONVERSIONS = {
   // Volume conversions (base: ml)
   'ml': { toBase: 1, type: 'volume' },
+  'cl': { toBase: 10, type: 'volume' },
   'l': { toBase: 1000, type: 'volume' },
   'oz': { toBase: 29.5735, type: 'volume' },
+  'fl oz': { toBase: 29.5735, type: 'volume' },
+  'cup': { toBase: 236.588, type: 'volume' },
+  'pint': { toBase: 473.176, type: 'volume' },
+  'quart': { toBase: 946.353, type: 'volume' },
+  'gallon': { toBase: 3785.41, type: 'volume' },
   'bottle': { toBase: 750, type: 'volume' }, // Standard wine bottle
   'can': { toBase: 330, type: 'volume' }, // Standard beer can
+  'shot': { toBase: 44.3603, type: 'volume' }, // Standard 1.5 oz shot
+  'jigger': { toBase: 44.3603, type: 'volume' }, // Same as shot
 
   // Weight conversions (base: g) 
+  'mg': { toBase: 0.001, type: 'weight' },
   'g': { toBase: 1, type: 'weight' },
   'kg': { toBase: 1000, type: 'weight' },
+  'oz (weight)': { toBase: 28.3495, type: 'weight' },
   'lb': { toBase: 453.592, type: 'weight' },
 
   // Count conversions (base: unit)
-  'unit': { toBase: 1, type: 'count' }
+  'unit': { toBase: 1, type: 'count' },
+  'piece': { toBase: 1, type: 'count' },
+  'each': { toBase: 1, type: 'count' },
+  'dozen': { toBase: 12, type: 'count' }
 };
 
 // Convert between units of the same type
@@ -324,8 +337,287 @@ const styles = {
     maxHeight: '80vh',
     overflow: 'auto',
     boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)'
+  },
+  // NEW STYLES FOR ENHANCED INGREDIENT SELECTOR
+  categoryTab: {
+    padding: '12px 20px',
+    border: 'none',
+    background: 'rgba(255, 255, 255, 0.6)',
+    borderRadius: '12px',
+    cursor: 'pointer',
+    transition: 'all 0.3s ease',
+    fontSize: '0.875rem',
+    fontWeight: '600',
+    color: '#6b7280'
+  },
+  categoryTabActive: {
+    background: 'linear-gradient(135deg, #3b82f6, #06b6d4)',
+    color: 'white',
+    transform: 'scale(1.05)'
+  },
+  ingredientSelectorGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
+    gap: '12px',
+    maxHeight: '300px',
+    overflowY: 'auto',
+    padding: '16px',
+    background: 'rgba(249, 250, 251, 0.3)',
+    borderRadius: '16px',
+    border: '2px dashed rgba(59, 130, 246, 0.3)'
+  },
+  ingredientSelectorCard: {
+    padding: '12px',
+    background: 'rgba(255, 255, 255, 0.8)',
+    borderRadius: '12px',
+    border: '1px solid rgba(255, 255, 255, 0.3)',
+    cursor: 'pointer',
+    transition: 'all 0.3s ease',
+    textAlign: 'center'
+  },
+  ingredientSelectorCardHover: {
+    background: 'rgba(59, 130, 246, 0.1)',
+    borderColor: '#3b82f6',
+    transform: 'translateY(-2px)'
+  },
+  ingredientSelectorButton: {
+    cursor: 'pointer',
+    textAlign: 'left',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between'
   }
 };
+
+// Enhanced Ingredient Selector Component
+function IngredientSelector({ ingredients, selectedIngredientId, onIngredientSelect, onClose }) {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('All');
+  const [hoveredIngredient, setHoveredIngredient] = useState(null);
+
+  // Get unique categories
+  const categories = ['All', ...new Set(ingredients.map(ing => ing.category))];
+
+  // Filter ingredients
+  const filteredIngredients = ingredients.filter(ingredient => {
+    const matchesSearch = ingredient.name.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesCategory = selectedCategory === 'All' || ingredient.category === selectedCategory;
+    return matchesSearch && matchesCategory;
+  });
+
+  // Group ingredients by category for display
+  const groupedIngredients = selectedCategory === 'All'
+    ? categories.slice(1).reduce((acc, category) => {
+      acc[category] = filteredIngredients.filter(ing => ing.category === category);
+      return acc;
+    }, {})
+    : { [selectedCategory]: filteredIngredients };
+
+  const handleIngredientClick = (ingredient) => {
+    onIngredientSelect(ingredient.id);
+    onClose();
+  };
+
+  return (
+    <div style={styles.modal} onClick={onClose}>
+      <div style={styles.modalContent} onClick={e => e.stopPropagation()}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+          <h3 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 'bold', color: '#374151' }}>
+            🧪 Select Ingredient
+          </h3>
+          <button
+            onClick={onClose}
+            style={{
+              background: '#ef4444',
+              color: 'white',
+              border: 'none',
+              borderRadius: '8px',
+              padding: '8px 12px',
+              cursor: 'pointer'
+            }}
+          >
+            ✕ Close
+          </button>
+        </div>
+
+        {/* Search Bar */}
+        <div style={{ position: 'relative', marginBottom: '24px' }}>
+          <span style={{
+            position: 'absolute',
+            left: '16px',
+            top: '50%',
+            transform: 'translateY(-50%)',
+            color: '#9ca3af',
+            fontSize: '1.2rem'
+          }}>
+            🔍
+          </span>
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Search ingredients... (e.g., vodka, lime, syrup)"
+            style={{
+              ...styles.input,
+              paddingLeft: '48px',
+              margin: 0,
+              fontSize: '1rem'
+            }}
+          />
+        </div>
+
+        {/* Category Tabs */}
+        <div style={{
+          display: 'flex',
+          gap: '8px',
+          marginBottom: '24px',
+          flexWrap: 'wrap',
+          overflowX: 'auto',
+          paddingBottom: '8px'
+        }}>
+          {categories.map(category => (
+            <button
+              key={category}
+              onClick={() => setSelectedCategory(category)}
+              style={{
+                ...styles.categoryTab,
+                ...(selectedCategory === category ? styles.categoryTabActive : {})
+              }}
+            >
+              {category} {category !== 'All' && `(${ingredients.filter(ing => ing.category === category).length})`}
+            </button>
+          ))}
+        </div>
+
+        {/* Results Count */}
+        <div style={{
+          fontSize: '0.875rem',
+          color: '#6b7280',
+          marginBottom: '16px',
+          padding: '12px',
+          background: 'rgba(59, 130, 246, 0.1)',
+          borderRadius: '12px',
+          textAlign: 'center'
+        }}>
+          📊 Showing {filteredIngredients.length} ingredients
+          {searchTerm && ` matching "${searchTerm}"`}
+          {selectedCategory !== 'All' && ` in ${selectedCategory} category`}
+        </div>
+
+        {/* Ingredients Grid by Category */}
+        <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+          {Object.entries(groupedIngredients).map(([category, categoryIngredients]) => {
+            if (categoryIngredients.length === 0) return null;
+
+            return (
+              <div key={category} style={{ marginBottom: '24px' }}>
+                {selectedCategory === 'All' && (
+                  <h4 style={{
+                    fontSize: '1.125rem',
+                    fontWeight: 'bold',
+                    color: '#374151',
+                    marginBottom: '12px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px'
+                  }}>
+                    📂 {category} ({categoryIngredients.length})
+                  </h4>
+                )}
+
+                <div style={styles.ingredientSelectorGrid}>
+                  {categoryIngredients.map(ingredient => {
+                    const costPerUnit = (ingredient.purchase_price / ingredient.purchase_unit_qty).toFixed(4);
+                    const isSelected = selectedIngredientId === ingredient.id;
+
+                    return (
+                      <div
+                        key={ingredient.id}
+                        onClick={() => handleIngredientClick(ingredient)}
+                        onMouseEnter={() => setHoveredIngredient(ingredient.id)}
+                        onMouseLeave={() => setHoveredIngredient(null)}
+                        style={{
+                          ...styles.ingredientSelectorCard,
+                          ...(hoveredIngredient === ingredient.id ? styles.ingredientSelectorCardHover : {}),
+                          ...(isSelected ? {
+                            background: 'rgba(16, 185, 129, 0.1)',
+                            borderColor: '#10b981',
+                            transform: 'scale(1.05)'
+                          } : {})
+                        }}
+                      >
+                        <div style={{
+                          fontSize: '0.875rem',
+                          fontWeight: 'bold',
+                          color: '#374151',
+                          marginBottom: '8px',
+                          lineHeight: '1.2'
+                        }}>
+                          {ingredient.name}
+                        </div>
+
+                        <div style={{
+                          ...styles.badge,
+                          background: isSelected ? '#10b981' : '#3b82f6',
+                          marginBottom: '8px'
+                        }}>
+                          {ingredient.category}
+                        </div>
+
+                        <div style={{
+                          fontSize: '0.75rem',
+                          color: '#6b7280',
+                          lineHeight: '1.3'
+                        }}>
+                          <div>฿{costPerUnit}/{ingredient.purchase_unit_type}</div>
+                          <div>{ingredient.purchase_unit_qty}{ingredient.purchase_unit_type} @ ฿{ingredient.purchase_price}</div>
+                        </div>
+
+                        {isSelected && (
+                          <div style={{
+                            marginTop: '8px',
+                            fontSize: '0.75rem',
+                            color: '#10b981',
+                            fontWeight: 'bold'
+                          }}>
+                            ✓ Selected
+                          </div>
+                        )}
+
+                        {hoveredIngredient === ingredient.id && !isSelected && (
+                          <div style={{
+                            marginTop: '8px',
+                            fontSize: '0.75rem',
+                            color: '#3b82f6',
+                            fontWeight: 'bold'
+                          }}>
+                            Click to select
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {filteredIngredients.length === 0 && (
+          <div style={{
+            textAlign: 'center',
+            padding: '48px',
+            color: '#6b7280'
+          }}>
+            <div style={{ fontSize: '3rem', marginBottom: '16px' }}>🔍</div>
+            <h3>No ingredients found</h3>
+            <p>Try adjusting your search term or category filter</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function AddIngredientForm({ onIngredientAdded }) {
   const [formData, setFormData] = useState({
@@ -340,7 +632,7 @@ function AddIngredientForm({ onIngredientAdded }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
 
-  const unitTypes = ['ml', 'oz', 'l', 'unit', 'bottle', 'can', 'kg', 'g', 'lb'];
+  const unitTypes = ['ml', 'cl', 'oz', 'fl oz', 'cup', 'pint', 'quart', 'gallon', 'l', 'shot', 'jigger', 'bottle', 'can', 'mg', 'g', 'oz (weight)', 'kg', 'lb', 'unit', 'piece', 'each', 'dozen'];
   const categories = Object.keys(CATEGORY_TARGETS);
 
   const handleInputChange = (e) => {
@@ -530,6 +822,10 @@ function RecipeBuilder({ ingredients, onRecipeSaved, editingRecipe, onCancelEdit
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [actualPrice, setActualPrice] = useState('');
 
+  // NEW STATE FOR ENHANCED INGREDIENT SELECTOR
+  const [showIngredientSelector, setShowIngredientSelector] = useState(false);
+  const [selectingForIndex, setSelectingForIndex] = useState(null);
+
   // Load recipe data when editing
   useEffect(() => {
     if (editingRecipe) {
@@ -575,6 +871,19 @@ function RecipeBuilder({ ingredients, onRecipeSaved, editingRecipe, onCancelEdit
     const copy = [...selectedItems];
     copy[index][field] = value;
     setSelectedItems(copy);
+  };
+
+  // NEW FUNCTIONS FOR ENHANCED INGREDIENT SELECTOR
+  const handleIngredientSelect = (index) => {
+    setSelectingForIndex(index);
+    setShowIngredientSelector(true);
+  };
+
+  const handleIngredientSelected = (ingredientId) => {
+    if (selectingForIndex !== null) {
+      handleChange(selectingForIndex, 'ingredient_id', ingredientId);
+      setSelectingForIndex(null);
+    }
   };
 
   const calculateCost = () => {
@@ -752,7 +1061,7 @@ function RecipeBuilder({ ingredients, onRecipeSaved, editingRecipe, onCancelEdit
             {editingRecipe ? `✏️ Editing: ${editingRecipe.name}` : 'Recipe Builder & Cost Calculator'}
           </h2>
           <p style={styles.cardSubtitle}>
-            {editingRecipe ? 'Edit ingredients, amounts, instructions - all aspects are editable' : 'Create and analyze beverage recipes'} • MargaritaHotSauceLLC
+            {editingRecipe ? 'Edit ingredients, amounts, instructions - all aspects are editable' : 'Create and analyze beverage recipes with enhanced ingredient search'} • MargaritaHotSauceLLC
           </p>
         </div>
         <div style={{ display: 'flex', gap: '12px' }}>
@@ -771,7 +1080,7 @@ function RecipeBuilder({ ingredients, onRecipeSaved, editingRecipe, onCancelEdit
       </div>
 
       <div style={{ ...styles.message, ...styles.messageInfo, marginBottom: '24px' }}>
-        🔄 <strong>Auto Unit Conversion:</strong> Mix units freely! Use 30ml gin + 1oz vermouth + 2cl olive brine - the app handles all conversions automatically.
+        🔍 <strong>Enhanced Ingredient Selection:</strong> Click ingredient buttons to search by name, browse by category, and see real-time cost information. Auto Unit Conversion: Mix units freely! Use 30ml gin + 1oz vermouth + 2cl olive brine - the app handles all conversions automatically.
       </div>
 
       <div style={{ ...styles.grid, ...styles.gridCols2, marginBottom: '32px' }}>
@@ -808,16 +1117,33 @@ function RecipeBuilder({ ingredients, onRecipeSaved, editingRecipe, onCancelEdit
           return (
             <div key={index} style={{ marginBottom: '12px' }}>
               <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: '12px', alignItems: 'center', padding: '16px', background: 'rgba(249, 250, 251, 0.5)', borderRadius: '12px' }}>
-                <select
-                  value={item.ingredient_id}
-                  onChange={e => handleChange(index, 'ingredient_id', e.target.value)}
-                  style={{ ...styles.input, margin: 0, padding: '12px' }}
+
+                {/* ENHANCED INGREDIENT SELECTOR BUTTON */}
+                <button
+                  onClick={() => handleIngredientSelect(index)}
+                  style={{
+                    ...styles.input,
+                    ...styles.ingredientSelectorButton,
+                    margin: 0,
+                    padding: '12px',
+                    background: ingredient ? 'rgba(16, 185, 129, 0.1)' : 'rgba(249, 250, 251, 0.8)',
+                    border: ingredient ? '2px solid #10b981' : '2px dashed #d1d5db'
+                  }}
                 >
-                  <option value="">Select Ingredient</option>
-                  {ingredients.map(ing => (
-                    <option key={ing.id} value={ing.id}>{ing.name} ({ing.category}) - {ing.purchase_unit_type}</option>
-                  ))}
-                </select>
+                  <span style={{ color: ingredient ? '#047857' : '#6b7280' }}>
+                    {ingredient ? (
+                      <>
+                        <strong>{ingredient.name}</strong>
+                        <span style={{ fontSize: '0.875rem', marginLeft: '8px' }}>
+                          ({ingredient.category}) - ฿{(ingredient.purchase_price / ingredient.purchase_unit_qty).toFixed(4)}/{ingredient.purchase_unit_type}
+                        </span>
+                      </>
+                    ) : (
+                      '🔍 Click to search & select ingredient...'
+                    )}
+                  </span>
+                  <span style={{ fontSize: '1.2rem' }}>{ingredient ? '✓' : '🔍'}</span>
+                </button>
 
                 <input
                   type="number"
@@ -834,11 +1160,27 @@ function RecipeBuilder({ ingredients, onRecipeSaved, editingRecipe, onCancelEdit
                   style={{ ...styles.input, margin: 0, padding: '12px' }}
                 >
                   <option value="ml">ml</option>
+                  <option value="cl">cl</option>
                   <option value="oz">oz</option>
+                  <option value="fl oz">fl oz</option>
+                  <option value="cup">cup</option>
+                  <option value="pint">pint</option>
+                  <option value="quart">quart</option>
+                  <option value="gallon">gallon</option>
                   <option value="l">l</option>
+                  <option value="shot">shot</option>
+                  <option value="jigger">jigger</option>
+                  <option value="bottle">bottle</option>
+                  <option value="can">can</option>
+                  <option value="mg">mg</option>
                   <option value="g">g</option>
+                  <option value="oz (weight)">oz (weight)</option>
                   <option value="kg">kg</option>
+                  <option value="lb">lb</option>
                   <option value="unit">unit</option>
+                  <option value="piece">piece</option>
+                  <option value="each">each</option>
+                  <option value="dozen">dozen</option>
                 </select>
 
                 {selectedItems.length > 1 && (
@@ -1095,6 +1437,19 @@ function RecipeBuilder({ ingredients, onRecipeSaved, editingRecipe, onCancelEdit
           </div>
         </div>
       )}
+
+      {/* ENHANCED INGREDIENT SELECTOR MODAL */}
+      {showIngredientSelector && (
+        <IngredientSelector
+          ingredients={ingredients}
+          selectedIngredientId={selectedItems[selectingForIndex]?.ingredient_id}
+          onIngredientSelect={handleIngredientSelected}
+          onClose={() => {
+            setShowIngredientSelector(false);
+            setSelectingForIndex(null);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -1317,7 +1672,7 @@ function IngredientsList({ ingredients, onRefresh }) {
                         onChange={(e) => handleFormChange('purchase_unit_type', e.target.value)}
                         style={{ ...styles.input, margin: 0, padding: '8px' }}
                       >
-                        {['ml', 'oz', 'l', 'unit', 'bottle', 'can', 'kg', 'g', 'lb'].map(unit =>
+                        {['ml', 'cl', 'oz', 'fl oz', 'cup', 'pint', 'quart', 'gallon', 'l', 'shot', 'jigger', 'bottle', 'can', 'mg', 'g', 'oz (weight)', 'kg', 'lb', 'unit', 'piece', 'each', 'dozen'].map(unit =>
                           <option key={unit} value={unit}>{unit}</option>
                         )}
                       </select>
