@@ -1454,316 +1454,639 @@ function RecipeBuilder({ ingredients, onRecipeSaved, editingRecipe, onCancelEdit
   );
 }
 
-function IngredientsList({ ingredients, onRefresh }) {
-  const [filter, setFilter] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState('All');
-  const [editingIngredient, setEditingIngredient] = useState(null);
-  const [editForm, setEditForm] = useState({});
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [message, setMessage] = useState({ type: '', text: '' });
+// Price Impact Analysis Component
+function PriceImpactModal({
+  isOpen,
+  onClose,
+  oldIngredient,
+  newIngredient,
+  affectedRecipes,
+  ingredients,
+  onUpdatePrices
+}) {
+  if (!isOpen) return null;
 
-  const filteredIngredients = ingredients.filter(ingredient => {
-    const matchesName = ingredient.name.toLowerCase().includes(filter.toLowerCase());
-    const matchesCategory = categoryFilter === 'All' || ingredient.category === categoryFilter;
-    return matchesName && matchesCategory;
-  });
+  const oldCostPerUnit = oldIngredient.purchase_price / oldIngredient.purchase_unit_qty;
+  const newCostPerUnit = newIngredient.purchase_price / newIngredient.purchase_unit_qty;
+  const costChange = ((newCostPerUnit - oldCostPerUnit) / oldCostPerUnit * 100);
+  const isIncrease = costChange > 0;
 
-  const categories = ['All', ...Object.keys(CATEGORY_TARGETS)];
+  // Calculate impact for each affected recipe
+  const recipeImpacts = affectedRecipes.map(recipe => {
+    const recipeIngredient = recipe.recipe_ingredients.find(ri => ri.ingredient_id === oldIngredient.id);
+    if (!recipeIngredient) return null;
 
-  const exportIngredients = () => {
-    const exportData = filteredIngredients.map(ing => ({
-      name: ing.name,
-      category: ing.category,
-      quantity: ing.purchase_unit_qty,
-      unit: ing.purchase_unit_type,
-      price: ing.purchase_price,
-      supplier: ing.supplier || '',
-      costPerUnit: (ing.purchase_price / ing.purchase_unit_qty).toFixed(4),
-      tags: ing.tags ? ing.tags.join(', ') : ''
+    // Calculate old and new costs for this recipe
+    const oldUnitCost = getUnitCostInTargetUnit(oldIngredient, recipeIngredient.unit_type);
+    const newUnitCost = getUnitCostInTargetUnit(newIngredient, recipeIngredient.unit_type);
+    const oldItemCost = recipeIngredient.amount_used * oldUnitCost;
+    const newItemCost = recipeIngredient.amount_used * newUnitCost;
+    const itemCostChange = newItemCost - oldItemCost;
+
+    // Calculate total recipe costs (old and new)
+    let oldTotalCost = 0;
+    let newTotalCost = 0;
+
+    recipe.recipe_ingredients.forEach(ri => {
+      const ingredient = ingredients.find(i => i.id === ri.ingredient_id);
+      if (ingredient) {
+        const unitCost = ri.ingredient_id === oldIngredient.id
+          ? getUnitCostInTargetUnit(ri.ingredient_id === oldIngredient.id ? oldIngredient : ingredient, ri.unit_type)
+          : getUnitCostInTargetUnit(ingredient, ri.unit_type);
+        const newUnitCostCalc = ri.ingredient_id === oldIngredient.id
+          ? getUnitCostInTargetUnit(newIngredient, ri.unit_type)
+          : getUnitCostInTargetUnit(ingredient, ri.unit_type);
+
+        oldTotalCost += ri.amount_used * unitCost;
+        newTotalCost += ri.amount_used * newUnitCostCalc;
+      }
+    });
+
+    const totalCostChange = newTotalCost - oldTotalCost;
+    const totalCostChangePercent = (totalCostChange / oldTotalCost * 100);
+
+    // Calculate suggested pricing
+    const targets = CATEGORY_TARGETS[recipe.category] || CATEGORY_TARGETS['Classic Cocktails'];
+    const oldSuggestedPrice = oldTotalCost * targets.markup;
+    const newSuggestedPrice = newTotalCost * targets.markup;
+    const priceAdjustment = newSuggestedPrice - oldSuggestedPrice;
+
+    // Calculate pour cost impact
+    const oldPourCost = (oldTotalCost / oldSuggestedPrice * 100);
+    const newPourCost = (newTotalCost / newSuggestedPrice * 100);
+
+    return {
+      recipe,
+      oldItemCost: oldItemCost.toFixed(2),
+      newItemCost: newItemCost.toFixed(2),
+      itemCostChange: itemCostChange.toFixed(2),
+      oldTotalCost: oldTotalCost.toFixed(2),
+      newTotalCost: newTotalCost.toFixed(2),
+      totalCostChange: totalCostChange.toFixed(2),
+      totalCostChangePercent: totalCostChangePercent.toFixed(1),
+      oldSuggestedPrice: oldSuggestedPrice.toFixed(2),
+      newSuggestedPrice: newSuggestedPrice.toFixed(2),
+      priceAdjustment: priceAdjustment.toFixed(2),
+      oldPourCost: oldPourCost.toFixed(1),
+      newPourCost: newPourCost.toFixed(1),
+      amount: recipeIngredient.amount_used,
+      unit: recipeIngredient.unit_type
+    };
+  }).filter(impact => impact !== null);
+
+  // Sort by impact severity (highest cost change first)
+  recipeImpacts.sort((a, b) => Math.abs(parseFloat(b.totalCostChange)) - Math.abs(parseFloat(a.totalCostChange)));
+
+  const exportImpactReport = () => {
+    const exportData = recipeImpacts.map(impact => ({
+      recipeName: impact.recipe.name,
+      category: impact.recipe.category,
+      ingredientAmount: `${impact.amount} ${impact.unit}`,
+      oldItemCost: impact.oldItemCost,
+      newItemCost: impact.newItemCost,
+      itemCostChange: impact.itemCostChange,
+      oldTotalRecipeCost: impact.oldTotalCost,
+      newTotalRecipeCost: impact.newTotalCost,
+      totalCostChange: impact.totalCostChange,
+      costChangePercent: impact.totalCostChangePercent,
+      oldSuggestedPrice: impact.oldSuggestedPrice,
+      newSuggestedPrice: impact.newSuggestedPrice,
+      priceAdjustment: impact.priceAdjustment,
+      oldPourCost: impact.oldPourCost,
+      newPourCost: impact.newPourCost
     }));
 
-    exportToCSV(exportData, 'ingredients_inventory.csv');
-  };
-
-  const handleEditClick = (ingredient) => {
-    setEditingIngredient(ingredient.id);
-    setEditForm({
-      name: ingredient.name,
-      purchase_unit_qty: ingredient.purchase_unit_qty,
-      purchase_unit_type: ingredient.purchase_unit_type,
-      purchase_price: ingredient.purchase_price,
-      category: ingredient.category,
-      supplier: ingredient.supplier || '',
-      tags: ingredient.tags ? ingredient.tags.join(', ') : ''
-    });
-    setMessage({ type: '', text: '' });
-  };
-
-  const handleCancelEdit = () => {
-    setEditingIngredient(null);
-    setEditForm({});
-    setMessage({ type: '', text: '' });
-  };
-
-  const handleFormChange = (field, value) => {
-    setEditForm(prev => ({ ...prev, [field]: value }));
-  };
-
-  const handleSaveEdit = async () => {
-    setIsSubmitting(true);
-    setMessage({ type: '', text: '' });
-
-    try {
-      if (!editForm.name.trim() || !editForm.purchase_unit_qty || !editForm.purchase_price) {
-        throw new Error('Please fill all required fields');
-      }
-
-      const tagsArray = editForm.tags.split(',').map(t => t.trim()).filter(t => t);
-      const updateData = {
-        name: editForm.name.trim(),
-        purchase_unit_qty: parseFloat(editForm.purchase_unit_qty),
-        purchase_unit_type: editForm.purchase_unit_type,
-        purchase_price: parseFloat(editForm.purchase_price),
-        category: editForm.category,
-        supplier: editForm.supplier.trim(),
-        tags: tagsArray,
-        date_updated: new Date().toISOString()
-      };
-
-      const { error } = await supabase
-        .from('ingredients')
-        .update(updateData)
-        .eq('id', editingIngredient);
-
-      if (error) throw error;
-
-      setMessage({ type: 'success', text: `✅ "${editForm.name}" updated successfully!` });
-      setEditingIngredient(null);
-      setEditForm({});
-      if (onRefresh) onRefresh();
-    } catch (err) {
-      setMessage({ type: 'error', text: `❌ Error: ${err.message}` });
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleDeleteIngredient = async (ingredient) => {
-    if (!window.confirm(`Are you sure you want to delete "${ingredient.name}"? This action cannot be undone.`)) {
-      return;
-    }
-
-    try {
-      const { error } = await supabase
-        .from('ingredients')
-        .delete()
-        .eq('id', ingredient.id);
-
-      if (error) throw error;
-
-      alert(`🗑️ "${ingredient.name}" deleted successfully!`);
-      if (onRefresh) onRefresh();
-    } catch (err) {
-      alert(`❌ Error deleting ingredient: ${err.message}`);
-    }
+    exportToCSV(exportData, `price_impact_${newIngredient.name.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.csv`);
   };
 
   return (
-    <div style={{ ...styles.card, maxWidth: '1200px' }}>
-      <div style={styles.cardHeader}>
-        <div style={{ ...styles.logo, background: 'linear-gradient(135deg, #9333ea, #ec4899)' }}>
-          <MartiniIcon size={28} />
+    <div style={styles.modal} onClick={onClose}>
+      <div style={{
+        ...styles.modalContent,
+        maxWidth: '1000px',
+        maxHeight: '90vh',
+        overflow: 'auto'
+      }} onClick={e => e.stopPropagation()}>
+
+        {/* Header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+          <div>
+            <h2 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 'bold', color: isIncrease ? '#dc2626' : '#059669' }}>
+              {isIncrease ? '⚠️' : '📉'} Price Impact Analysis
+            </h2>
+            <p style={{ margin: '4px 0 0 0', color: '#6b7280', fontSize: '0.875rem' }}>
+              Impact of changing "{oldIngredient.name}" price
+            </p>
+          </div>
+          <div style={{ display: 'flex', gap: '12px' }}>
+            <button
+              onClick={exportImpactReport}
+              style={{
+                ...styles.button,
+                background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+                fontSize: '0.875rem',
+                padding: '8px 16px'
+              }}
+            >
+              📊 Export Report
+            </button>
+            <button
+              onClick={onClose}
+              style={{ background: '#6b7280', color: 'white', border: 'none', borderRadius: '8px', padding: '8px 12px', cursor: 'pointer' }}
+            >
+              ✕ Close
+            </button>
+          </div>
         </div>
-        <div style={{ flex: 1 }}>
-          <h2 style={{ ...styles.cardTitle, background: 'linear-gradient(135deg, #9333ea, #ec4899)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-            Ingredient Inventory
-          </h2>
-          <p style={styles.cardSubtitle}>Manage your beverage ingredients • MargaritaHotSauceLLC</p>
+
+        {/* Price Change Summary */}
+        <div style={{
+          background: isIncrease ? 'rgba(239, 68, 68, 0.1)' : 'rgba(16, 185, 129, 0.1)',
+          border: `1px solid ${isIncrease ? 'rgba(239, 68, 68, 0.2)' : 'rgba(16, 185, 129, 0.2)'}`,
+          borderRadius: '16px',
+          padding: '24px',
+          marginBottom: '32px'
+        }}>
+          <h3 style={{
+            fontSize: '1.125rem',
+            fontWeight: 'bold',
+            marginBottom: '16px',
+            color: isIncrease ? '#dc2626' : '#059669'
+          }}>
+            💰 Price Change Summary
+          </h3>
+
+          <div style={{ ...styles.grid, ...styles.gridCols3, gap: '16px' }}>
+            <div style={{ background: 'rgba(255, 255, 255, 0.8)', padding: '16px', borderRadius: '12px', textAlign: 'center' }}>
+              <div style={{ fontSize: '0.875rem', color: '#6b7280', marginBottom: '4px' }}>Old Cost per {oldIngredient.purchase_unit_type}</div>
+              <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#374151' }}>฿{oldCostPerUnit.toFixed(4)}</div>
+            </div>
+
+            <div style={{ background: 'rgba(255, 255, 255, 0.8)', padding: '16px', borderRadius: '12px', textAlign: 'center' }}>
+              <div style={{ fontSize: '0.875rem', color: '#6b7280', marginBottom: '4px' }}>New Cost per {newIngredient.purchase_unit_type}</div>
+              <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: isIncrease ? '#dc2626' : '#059669' }}>
+                ฿{newCostPerUnit.toFixed(4)}
+              </div>
+            </div>
+
+            <div style={{ background: 'rgba(255, 255, 255, 0.8)', padding: '16px', borderRadius: '12px', textAlign: 'center' }}>
+              <div style={{ fontSize: '0.875rem', color: '#6b7280', marginBottom: '4px' }}>Change</div>
+              <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: isIncrease ? '#dc2626' : '#059669' }}>
+                {isIncrease ? '+' : ''}{costChange.toFixed(1)}%
+              </div>
+            </div>
+          </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <span style={{ fontSize: '0.875rem', fontWeight: '600', color: '#6b7280', background: '#f3f4f6', padding: '8px 16px', borderRadius: '9999px' }}>
-            {filteredIngredients.length} ingredients
-          </span>
-          <button onClick={exportIngredients} style={{ ...styles.button, background: 'linear-gradient(135deg, #10b981, #059669)', fontSize: '0.875rem', padding: '12px 20px' }}>
-            📥 Export CSV
+
+        {/* Affected Recipes */}
+        <div style={{ marginBottom: '24px' }}>
+          <h3 style={{ fontSize: '1.125rem', fontWeight: 'bold', marginBottom: '16px', color: '#374151' }}>
+            🍸 Affected Recipes ({recipeImpacts.length})
+          </h3>
+
+          {recipeImpacts.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '32px', color: '#6b7280' }}>
+              <div style={{ fontSize: '2rem', marginBottom: '8px' }}>✅</div>
+              <p>No recipes use this ingredient</p>
+            </div>
+          ) : (
+            <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+              {recipeImpacts.map((impact, index) => (
+                <div key={impact.recipe.id} style={{
+                  background: 'rgba(255, 255, 255, 0.8)',
+                  border: '1px solid rgba(255, 255, 255, 0.3)',
+                  borderRadius: '12px',
+                  padding: '20px',
+                  marginBottom: '16px'
+                }}>
+
+                  {/* Recipe Header */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                    <div>
+                      <h4 style={{ margin: 0, fontSize: '1.125rem', fontWeight: 'bold', color: '#374151' }}>
+                        {impact.recipe.name}
+                      </h4>
+                      <p style={{ margin: '4px 0 0 0', fontSize: '0.875rem', color: '#6b7280' }}>
+                        {impact.recipe.category} • Uses {impact.amount} {impact.unit}
+                      </p>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{
+                        fontSize: '1.125rem',
+                        fontWeight: 'bold',
+                        color: parseFloat(impact.totalCostChange) > 0 ? '#dc2626' : '#059669'
+                      }}>
+                        {parseFloat(impact.totalCostChange) > 0 ? '+' : ''}฿{impact.totalCostChange}
+                      </div>
+                      <div style={{ fontSize: '0.875rem', color: '#6b7280' }}>
+                        ({parseFloat(impact.totalCostChangePercent) > 0 ? '+' : ''}{impact.totalCostChangePercent}%)
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Impact Details Grid */}
+                  <div style={{ ...styles.grid, gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '12px', marginBottom: '16px' }}>
+
+                    <div style={{ background: 'rgba(249, 250, 251, 0.8)', padding: '12px', borderRadius: '8px', textAlign: 'center' }}>
+                      <div style={{ fontSize: '0.75rem', color: '#6b7280', marginBottom: '2px' }}>Old Recipe Cost</div>
+                      <div style={{ fontSize: '1rem', fontWeight: 'bold', color: '#374151' }}>฿{impact.oldTotalCost}</div>
+                    </div>
+
+                    <div style={{ background: 'rgba(249, 250, 251, 0.8)', padding: '12px', borderRadius: '8px', textAlign: 'center' }}>
+                      <div style={{ fontSize: '0.75rem', color: '#6b7280', marginBottom: '2px' }}>New Recipe Cost</div>
+                      <div style={{ fontSize: '1rem', fontWeight: 'bold', color: parseFloat(impact.totalCostChange) > 0 ? '#dc2626' : '#059669' }}>
+                        ฿{impact.newTotalCost}
+                      </div>
+                    </div>
+
+                    <div style={{ background: 'rgba(249, 250, 251, 0.8)', padding: '12px', borderRadius: '8px', textAlign: 'center' }}>
+                      <div style={{ fontSize: '0.75rem', color: '#6b7280', marginBottom: '2px' }}>Old Suggested Price</div>
+                      <div style={{ fontSize: '1rem', fontWeight: 'bold', color: '#374151' }}>฿{impact.oldSuggestedPrice}</div>
+                    </div>
+
+                    <div style={{ background: 'rgba(249, 250, 251, 0.8)', padding: '12px', borderRadius: '8px', textAlign: 'center' }}>
+                      <div style={{ fontSize: '0.75rem', color: '#6b7280', marginBottom: '2px' }}>New Suggested Price</div>
+                      <div style={{ fontSize: '1rem', fontWeight: 'bold', color: parseFloat(impact.priceAdjustment) > 0 ? '#dc2626' : '#059669' }}>
+                        ฿{impact.newSuggestedPrice}
+                      </div>
+                    </div>
+
+                    <div style={{ background: 'rgba(249, 250, 251, 0.8)', padding: '12px', borderRadius: '8px', textAlign: 'center' }}>
+                      <div style={{ fontSize: '0.75rem', color: '#6b7280', marginBottom: '2px' }}>Pour Cost Change</div>
+                      <div style={{ fontSize: '1rem', fontWeight: 'bold', color: '#374151' }}>
+                        {impact.oldPourCost}% → {impact.newPourCost}%
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Recommendations */}
+                  <div style={{
+                    background: parseFloat(impact.priceAdjustment) > 0 ? 'rgba(239, 68, 68, 0.1)' : 'rgba(16, 185, 129, 0.1)',
+                    border: `1px solid ${parseFloat(impact.priceAdjustment) > 0 ? 'rgba(239, 68, 68, 0.2)' : 'rgba(16, 185, 129, 0.2)'}`,
+                    borderRadius: '8px',
+                    padding: '12px'
+                  }}>
+                    <div style={{ fontSize: '0.875rem', fontWeight: '600', marginBottom: '4px', color: '#374151' }}>
+                      💡 Recommendation:
+                    </div>
+                    <div style={{ fontSize: '0.875rem', color: '#4b5563' }}>
+                      {parseFloat(impact.priceAdjustment) > 0
+                        ? `Consider increasing menu price by ฿${impact.priceAdjustment} to maintain target margins.`
+                        : parseFloat(impact.priceAdjustment) < 0
+                          ? `You could reduce menu price by ฿${Math.abs(parseFloat(impact.priceAdjustment))} or maintain current pricing for higher margins.`
+                          : 'No price adjustment needed - margins remain stable.'
+                      }
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Action Buttons */}
+        <div style={{ display: 'flex', gap: '16px', justifyContent: 'center', paddingTop: '16px', borderTop: '1px solid rgba(229, 231, 235, 0.5)' }}>
+          <button
+            onClick={onClose}
+            style={{
+              ...styles.button,
+              background: 'linear-gradient(135deg, #6b7280, #4b5563)',
+              fontSize: '0.875rem',
+              padding: '12px 24px'
+            }}
+          >
+            📋 Review Later
+          </button>
+          <button
+            onClick={() => {
+              onUpdatePrices();
+              onClose();
+            }}
+            style={{
+              ...styles.button,
+              fontSize: '0.875rem',
+              padding: '12px 24px'
+            }}
+          >
+            ✅ Update Ingredient Price
           </button>
         </div>
-      </div>
-
-      {message.text && (
-        <div style={{
-          ...styles.message,
-          ...(message.type === 'success' ? styles.messageSuccess : styles.messageError)
-        }}>
-          {message.text}
-        </div>
-      )}
-
-      <div style={{ ...styles.message, ...styles.messageInfo, marginBottom: '32px' }}>
-        ✏️ <strong>Click any ingredient</strong> to edit prices, supplier info, or details. Perfect for updating costs from new invoices!
-      </div>
-
-      <div style={{ display: 'flex', gap: '24px', marginBottom: '32px' }}>
-        <div style={{ position: 'relative', flex: 1 }}>
-          <span style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: '#9ca3af' }}>🔍</span>
-          <input
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-            placeholder="Search ingredients..."
-            style={{ ...styles.input, paddingLeft: '48px', margin: 0 }}
-          />
-        </div>
-
-        <select
-          value={categoryFilter}
-          onChange={(e) => setCategoryFilter(e.target.value)}
-          style={{ ...styles.input, width: '200px', margin: 0 }}
-        >
-          {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-        </select>
-      </div>
-
-      <div style={{ ...styles.grid, ...styles.gridCols2 }}>
-        {filteredIngredients.map(ingredient => {
-          const isEditing = editingIngredient === ingredient.id;
-          const costPerUnit = (ingredient.purchase_price / ingredient.purchase_unit_qty).toFixed(4);
-
-          return (
-            <div
-              key={ingredient.id}
-              style={{
-                ...styles.ingredientCard,
-                ...(isEditing ? styles.ingredientCardEditing : {}),
-                ':hover': !isEditing ? { borderColor: '#3b82f6', transform: 'translateY(-2px)' } : {}
-              }}
-              onClick={() => !isEditing && handleEditClick(ingredient)}
-            >
-              {isEditing ? (
-                <div>
-                  <div style={{ marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <h3 style={{ margin: 0, color: '#9333ea', fontWeight: 'bold' }}>✏️ Editing Ingredient</h3>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleCancelEdit(); }}
-                      style={{ background: '#ef4444', color: 'white', border: 'none', borderRadius: '8px', padding: '8px 12px', cursor: 'pointer' }}
-                    >
-                      ❌ Cancel
-                    </button>
-                  </div>
-
-                  <div style={{ ...styles.grid, gap: '12px' }}>
-                    <input
-                      value={editForm.name}
-                      onChange={(e) => handleFormChange('name', e.target.value)}
-                      placeholder="Ingredient name"
-                      style={{ ...styles.input, margin: 0, padding: '12px' }}
-                    />
-
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={editForm.purchase_unit_qty}
-                        onChange={(e) => handleFormChange('purchase_unit_qty', e.target.value)}
-                        placeholder="Qty"
-                        style={{ ...styles.input, margin: 0, padding: '8px' }}
-                      />
-                      <select
-                        value={editForm.purchase_unit_type}
-                        onChange={(e) => handleFormChange('purchase_unit_type', e.target.value)}
-                        style={{ ...styles.input, margin: 0, padding: '8px' }}
-                      >
-                        {['ml', 'cl', 'oz', 'fl oz', 'cup', 'pint', 'quart', 'gallon', 'l', 'shot', 'jigger', 'bottle', 'can', 'mg', 'g', 'oz (weight)', 'kg', 'lb', 'unit', 'piece', 'each', 'dozen'].map(unit =>
-                          <option key={unit} value={unit}>{unit}</option>
-                        )}
-                      </select>
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={editForm.purchase_price}
-                        onChange={(e) => handleFormChange('purchase_price', e.target.value)}
-                        placeholder="Price"
-                        style={{ ...styles.input, margin: 0, padding: '8px' }}
-                      />
-                    </div>
-
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                      <select
-                        value={editForm.category}
-                        onChange={(e) => handleFormChange('category', e.target.value)}
-                        style={{ ...styles.input, margin: 0, padding: '8px' }}
-                      >
-                        {Object.keys(CATEGORY_TARGETS).map(cat =>
-                          <option key={cat} value={cat}>{cat}</option>
-                        )}
-                      </select>
-                      <input
-                        value={editForm.supplier}
-                        onChange={(e) => handleFormChange('supplier', e.target.value)}
-                        placeholder="Supplier"
-                        style={{ ...styles.input, margin: 0, padding: '8px' }}
-                      />
-                    </div>
-
-                    <input
-                      value={editForm.tags}
-                      onChange={(e) => handleFormChange('tags', e.target.value)}
-                      placeholder="Tags (comma separated)"
-                      style={{ ...styles.input, margin: 0, padding: '8px' }}
-                    />
-
-                    <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); handleSaveEdit(); }}
-                        disabled={isSubmitting}
-                        style={{ ...styles.button, fontSize: '0.875rem', padding: '8px 16px', flex: 1 }}
-                      >
-                        💾 {isSubmitting ? 'Saving...' : 'Save Changes'}
-                      </button>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); handleDeleteIngredient(ingredient); }}
-                        style={{ ...styles.button, background: 'linear-gradient(135deg, #ef4444, #dc2626)', fontSize: '0.875rem', padding: '8px 16px' }}
-                      >
-                        🗑️ Delete
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
-                    <h3 style={{ margin: 0, fontSize: '1.125rem', fontWeight: 'bold', color: '#374151' }}>{ingredient.name}</h3>
-                    <span style={{ ...styles.badge, background: '#3b82f6' }}>{ingredient.category}</span>
-                  </div>
-
-                  <div style={{ fontSize: '0.875rem', color: '#6b7280', marginBottom: '12px' }}>
-                    <div><strong>Package:</strong> {ingredient.purchase_unit_qty} {ingredient.purchase_unit_type} @ ฿{ingredient.purchase_price}</div>
-                    <div><strong>Cost per unit:</strong> ฿{costPerUnit} per {ingredient.purchase_unit_type}</div>
-                    {ingredient.supplier && <div><strong>Supplier:</strong> {ingredient.supplier}</div>}
-                  </div>
-
-                  {ingredient.tags && ingredient.tags.length > 0 && (
-                    <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginTop: '8px' }}>
-                      {ingredient.tags.map((tag, i) => (
-                        <span key={i} style={{ ...styles.badge, background: '#10b981', fontSize: '0.75rem' }}>{tag}</span>
-                      ))}
-                    </div>
-                  )}
-
-                  <div style={{ marginTop: '12px', padding: '8px', background: 'rgba(59, 130, 246, 0.1)', borderRadius: '8px', fontSize: '0.75rem', color: '#1d4ed8', textAlign: 'center' }}>
-                    💡 Click to edit price, supplier, or details
-                  </div>
-                </div>
-              )}
-            </div>
-          );
-        })}
       </div>
     </div>
   );
 }
+const [filter, setFilter] = useState('');
+const [categoryFilter, setCategoryFilter] = useState('All');
+const [editingIngredient, setEditingIngredient] = useState(null);
+const [editForm, setEditForm] = useState({});
+const [isSubmitting, setIsSubmitting] = useState(false);
+const [message, setMessage] = useState({ type: '', text: '' });
+
+const filteredIngredients = ingredients.filter(ingredient => {
+  const matchesName = ingredient.name.toLowerCase().includes(filter.toLowerCase());
+  const matchesCategory = categoryFilter === 'All' || ingredient.category === categoryFilter;
+  return matchesName && matchesCategory;
+});
+
+const categories = ['All', ...Object.keys(CATEGORY_TARGETS)];
+
+const exportIngredients = () => {
+  const exportData = filteredIngredients.map(ing => ({
+    name: ing.name,
+    category: ing.category,
+    quantity: ing.purchase_unit_qty,
+    unit: ing.purchase_unit_type,
+    price: ing.purchase_price,
+    supplier: ing.supplier || '',
+    costPerUnit: (ing.purchase_price / ing.purchase_unit_qty).toFixed(4),
+    tags: ing.tags ? ing.tags.join(', ') : ''
+  }));
+
+  exportToCSV(exportData, 'ingredients_inventory.csv');
+};
+
+const handleEditClick = (ingredient) => {
+  setEditingIngredient(ingredient.id);
+  setEditForm({
+    name: ingredient.name,
+    purchase_unit_qty: ingredient.purchase_unit_qty,
+    purchase_unit_type: ingredient.purchase_unit_type,
+    purchase_price: ingredient.purchase_price,
+    category: ingredient.category,
+    supplier: ingredient.supplier || '',
+    tags: ingredient.tags ? ingredient.tags.join(', ') : ''
+  });
+  setMessage({ type: '', text: '' });
+};
+
+const handleCancelEdit = () => {
+  setEditingIngredient(null);
+  setEditForm({});
+  setMessage({ type: '', text: '' });
+};
+
+const handleFormChange = (field, value) => {
+  setEditForm(prev => ({ ...prev, [field]: value }));
+};
+
+const handleSaveEdit = async () => {
+  setIsSubmitting(true);
+  setMessage({ type: '', text: '' });
+
+  try {
+    if (!editForm.name.trim() || !editForm.purchase_unit_qty || !editForm.purchase_price) {
+      throw new Error('Please fill all required fields');
+    }
+
+    const tagsArray = editForm.tags.split(',').map(t => t.trim()).filter(t => t);
+    const updateData = {
+      name: editForm.name.trim(),
+      purchase_unit_qty: parseFloat(editForm.purchase_unit_qty),
+      purchase_unit_type: editForm.purchase_unit_type,
+      purchase_price: parseFloat(editForm.purchase_price),
+      category: editForm.category,
+      supplier: editForm.supplier.trim(),
+      tags: tagsArray,
+      date_updated: new Date().toISOString()
+    };
+
+    const { error } = await supabase
+      .from('ingredients')
+      .update(updateData)
+      .eq('id', editingIngredient);
+
+    if (error) throw error;
+
+    setMessage({ type: 'success', text: `✅ "${editForm.name}" updated successfully!` });
+    setEditingIngredient(null);
+    setEditForm({});
+    if (onRefresh) onRefresh();
+  } catch (err) {
+    setMessage({ type: 'error', text: `❌ Error: ${err.message}` });
+  } finally {
+    setIsSubmitting(false);
+  }
+};
+
+const handleDeleteIngredient = async (ingredient) => {
+  if (!window.confirm(`Are you sure you want to delete "${ingredient.name}"? This action cannot be undone.`)) {
+    return;
+  }
+
+  try {
+    const { error } = await supabase
+      .from('ingredients')
+      .delete()
+      .eq('id', ingredient.id);
+
+    if (error) throw error;
+
+    alert(`🗑️ "${ingredient.name}" deleted successfully!`);
+    if (onRefresh) onRefresh();
+  } catch (err) {
+    alert(`❌ Error deleting ingredient: ${err.message}`);
+  }
+};
+
+return (
+  <div style={{ ...styles.card, maxWidth: '1200px' }}>
+    <div style={styles.cardHeader}>
+      <div style={{ ...styles.logo, background: 'linear-gradient(135deg, #9333ea, #ec4899)' }}>
+        <MartiniIcon size={28} />
+      </div>
+      <div style={{ flex: 1 }}>
+        <h2 style={{ ...styles.cardTitle, background: 'linear-gradient(135deg, #9333ea, #ec4899)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+          Ingredient Inventory
+        </h2>
+        <p style={styles.cardSubtitle}>Manage your beverage ingredients • MargaritaHotSauceLLC</p>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+        <span style={{ fontSize: '0.875rem', fontWeight: '600', color: '#6b7280', background: '#f3f4f6', padding: '8px 16px', borderRadius: '9999px' }}>
+          {filteredIngredients.length} ingredients
+        </span>
+        <button onClick={exportIngredients} style={{ ...styles.button, background: 'linear-gradient(135deg, #10b981, #059669)', fontSize: '0.875rem', padding: '12px 20px' }}>
+          📥 Export CSV
+        </button>
+      </div>
+    </div>
+
+    {message.text && (
+      <div style={{
+        ...styles.message,
+        ...(message.type === 'success' ? styles.messageSuccess : styles.messageError)
+      }}>
+        {message.text}
+      </div>
+    )}
+
+    <div style={{ ...styles.message, ...styles.messageInfo, marginBottom: '32px' }}>
+      ✏️ <strong>Click any ingredient</strong> to edit prices, supplier info, or details. Perfect for updating costs from new invoices!
+    </div>
+
+    <div style={{ display: 'flex', gap: '24px', marginBottom: '32px' }}>
+      <div style={{ position: 'relative', flex: 1 }}>
+        <span style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: '#9ca3af' }}>🔍</span>
+        <input
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          placeholder="Search ingredients..."
+          style={{ ...styles.input, paddingLeft: '48px', margin: 0 }}
+        />
+      </div>
+
+      <select
+        value={categoryFilter}
+        onChange={(e) => setCategoryFilter(e.target.value)}
+        style={{ ...styles.input, width: '200px', margin: 0 }}
+      >
+        {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+      </select>
+    </div>
+
+    <div style={{ ...styles.grid, ...styles.gridCols2 }}>
+      {filteredIngredients.map(ingredient => {
+        const isEditing = editingIngredient === ingredient.id;
+        const costPerUnit = (ingredient.purchase_price / ingredient.purchase_unit_qty).toFixed(4);
+
+        return (
+          <div
+            key={ingredient.id}
+            style={{
+              ...styles.ingredientCard,
+              ...(isEditing ? styles.ingredientCardEditing : {}),
+              ':hover': !isEditing ? { borderColor: '#3b82f6', transform: 'translateY(-2px)' } : {}
+            }}
+            onClick={() => !isEditing && handleEditClick(ingredient)}
+          >
+            {isEditing ? (
+              <div>
+                <div style={{ marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <h3 style={{ margin: 0, color: '#9333ea', fontWeight: 'bold' }}>✏️ Editing Ingredient</h3>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleCancelEdit(); }}
+                    style={{ background: '#ef4444', color: 'white', border: 'none', borderRadius: '8px', padding: '8px 12px', cursor: 'pointer' }}
+                  >
+                    ❌ Cancel
+                  </button>
+                </div>
+
+                <div style={{ ...styles.grid, gap: '12px' }}>
+                  <input
+                    value={editForm.name}
+                    onChange={(e) => handleFormChange('name', e.target.value)}
+                    placeholder="Ingredient name"
+                    style={{ ...styles.input, margin: 0, padding: '12px' }}
+                  />
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={editForm.purchase_unit_qty}
+                      onChange={(e) => handleFormChange('purchase_unit_qty', e.target.value)}
+                      placeholder="Qty"
+                      style={{ ...styles.input, margin: 0, padding: '8px' }}
+                    />
+                    <select
+                      value={editForm.purchase_unit_type}
+                      onChange={(e) => handleFormChange('purchase_unit_type', e.target.value)}
+                      style={{ ...styles.input, margin: 0, padding: '8px' }}
+                    >
+                      {['ml', 'cl', 'oz', 'fl oz', 'cup', 'pint', 'quart', 'gallon', 'l', 'shot', 'jigger', 'bottle', 'can', 'mg', 'g', 'oz (weight)', 'kg', 'lb', 'unit', 'piece', 'each', 'dozen'].map(unit =>
+                        <option key={unit} value={unit}>{unit}</option>
+                      )}
+                    </select>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={editForm.purchase_price}
+                      onChange={(e) => handleFormChange('purchase_price', e.target.value)}
+                      placeholder="Price"
+                      style={{ ...styles.input, margin: 0, padding: '8px' }}
+                    />
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                    <select
+                      value={editForm.category}
+                      onChange={(e) => handleFormChange('category', e.target.value)}
+                      style={{ ...styles.input, margin: 0, padding: '8px' }}
+                    >
+                      {Object.keys(CATEGORY_TARGETS).map(cat =>
+                        <option key={cat} value={cat}>{cat}</option>
+                      )}
+                    </select>
+                    <input
+                      value={editForm.supplier}
+                      onChange={(e) => handleFormChange('supplier', e.target.value)}
+                      placeholder="Supplier"
+                      style={{ ...styles.input, margin: 0, padding: '8px' }}
+                    />
+                  </div>
+
+                  <input
+                    value={editForm.tags}
+                    onChange={(e) => handleFormChange('tags', e.target.value)}
+                    placeholder="Tags (comma separated)"
+                    style={{ ...styles.input, margin: 0, padding: '8px' }}
+                  />
+
+                  <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleSaveEdit(); }}
+                      disabled={isSubmitting}
+                      style={{ ...styles.button, fontSize: '0.875rem', padding: '8px 16px', flex: 1 }}
+                    >
+                      💾 {isSubmitting ? 'Saving...' : 'Save Changes'}
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleDeleteIngredient(ingredient); }}
+                      style={{ ...styles.button, background: 'linear-gradient(135deg, #ef4444, #dc2626)', fontSize: '0.875rem', padding: '8px 16px' }}
+                    >
+                      🗑️ Delete
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
+                  <h3 style={{ margin: 0, fontSize: '1.125rem', fontWeight: 'bold', color: '#374151' }}>{ingredient.name}</h3>
+                  <span style={{ ...styles.badge, background: '#3b82f6' }}>{ingredient.category}</span>
+                </div>
+
+                <div style={{ fontSize: '0.875rem', color: '#6b7280', marginBottom: '12px' }}>
+                  <div><strong>Package:</strong> {ingredient.purchase_unit_qty} {ingredient.purchase_unit_type} @ ฿{ingredient.purchase_price}</div>
+                  <div><strong>Cost per unit:</strong> ฿{costPerUnit} per {ingredient.purchase_unit_type}</div>
+                  {ingredient.supplier && <div><strong>Supplier:</strong> {ingredient.supplier}</div>}
+                </div>
+
+                {ingredient.tags && ingredient.tags.length > 0 && (
+                  <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginTop: '8px' }}>
+                    {ingredient.tags.map((tag, i) => (
+                      <span key={i} style={{ ...styles.badge, background: '#10b981', fontSize: '0.75rem' }}>{tag}</span>
+                    ))}
+                  </div>
+                )}
+
+                <div style={{ marginTop: '12px', padding: '8px', background: 'rgba(59, 130, 246, 0.1)', borderRadius: '8px', fontSize: '0.75rem', color: '#1d4ed8', textAlign: 'center' }}>
+                  💡 Click to edit price, supplier, or details
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  </div>
+);
+}
 
 function SavedRecipes({ recipes, ingredients, onRecipeEdit }) {
   const [selectedRecipe, setSelectedRecipe] = useState(null);
+  const [searchFilter, setSearchFilter] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('All');
+  const [ingredientFilter, setIngredientFilter] = useState('All');
 
   const handleRecipeClick = (recipe) => {
     setSelectedRecipe(recipe);
@@ -1795,6 +2118,84 @@ function SavedRecipes({ recipes, ingredients, onRecipeEdit }) {
     };
   };
 
+  // ENHANCED FILTERING LOGIC
+  const filteredRecipes = recipes.filter(recipe => {
+    // Search by recipe name
+    const matchesSearch = recipe.name.toLowerCase().includes(searchFilter.toLowerCase());
+
+    // Filter by recipe category
+    const matchesCategory = categoryFilter === 'All' || recipe.category === categoryFilter;
+
+    // Filter by ingredient - check if recipe contains the selected ingredient
+    let matchesIngredient = true;
+    if (ingredientFilter !== 'All') {
+      const hasIngredient = recipe.recipe_ingredients?.some(ri => {
+        const ingredient = ingredients.find(i => i.id === ri.ingredient_id);
+        return ingredient && ingredient.name.toLowerCase().includes(ingredientFilter.toLowerCase());
+      });
+      matchesIngredient = hasIngredient;
+    }
+
+    // Also search within ingredient names (for text search like "vodka")
+    let matchesIngredientSearch = true;
+    if (searchFilter.trim()) {
+      const searchInIngredients = recipe.recipe_ingredients?.some(ri => {
+        const ingredient = ingredients.find(i => i.id === ri.ingredient_id);
+        return ingredient && ingredient.name.toLowerCase().includes(searchFilter.toLowerCase());
+      });
+      matchesIngredientSearch = matchesSearch || searchInIngredients;
+    }
+
+    return matchesIngredientSearch && matchesCategory && matchesIngredient;
+  });
+
+  // Get unique recipe categories
+  const recipeCategories = ['All', ...new Set(recipes.map(recipe => recipe.category))];
+
+  // Get unique ingredients from all recipes for the ingredient filter
+  const allRecipeIngredients = ['All'];
+  recipes.forEach(recipe => {
+    if (recipe.recipe_ingredients) {
+      recipe.recipe_ingredients.forEach(ri => {
+        const ingredient = ingredients.find(i => i.id === ri.ingredient_id);
+        if (ingredient && !allRecipeIngredients.includes(ingredient.name)) {
+          allRecipeIngredients.push(ingredient.name);
+        }
+      });
+    }
+  });
+  allRecipeIngredients.sort();
+
+  // Clear filters function
+  const clearFilters = () => {
+    setSearchFilter('');
+    setCategoryFilter('All');
+    setIngredientFilter('All');
+  };
+
+  // Export filtered recipes
+  const exportFilteredRecipes = () => {
+    const exportData = filteredRecipes.map(recipe => {
+      const cost = calculateRecipeCost(recipe);
+      const ingredientsList = recipe.recipe_ingredients?.map(ri => {
+        const ingredient = ingredients.find(i => i.id === ri.ingredient_id);
+        return ingredient ? `${ri.amount_used}${ri.unit_type} ${ingredient.name}` : '';
+      }).join(', ') || '';
+
+      return {
+        name: recipe.name,
+        category: recipe.category,
+        ingredients: ingredientsList,
+        totalCost: cost?.totalCost || 'N/A',
+        suggestedPrice: cost?.suggestedPrice || 'N/A',
+        margin: cost?.margin || 'N/A',
+        updated: new Date(recipe.updated_at).toLocaleDateString()
+      };
+    });
+
+    exportToCSV(exportData, `filtered_recipes_${new Date().toISOString().split('T')[0]}.csv`);
+  };
+
   return (
     <div style={{ ...styles.card, maxWidth: '1200px' }}>
       <div style={styles.cardHeader}>
@@ -1803,22 +2204,155 @@ function SavedRecipes({ recipes, ingredients, onRecipeEdit }) {
         </div>
         <div style={{ flex: 1 }}>
           <h2 style={{ ...styles.cardTitle, background: 'linear-gradient(135deg, #ec4899, #be185d)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-            Saved Recipes
+            Recipe Collection & Search
           </h2>
-          <p style={styles.cardSubtitle}>Your recipe collection with cost analysis • MargaritaHotSauceLLC</p>
+          <p style={styles.cardSubtitle}>Search by name, ingredient, or category • MargaritaHotSauceLLC</p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
           <span style={{ fontSize: '0.875rem', fontWeight: '600', color: '#6b7280', background: '#f3f4f6', padding: '8px 16px', borderRadius: '9999px' }}>
-            {recipes.length} recipes
+            {filteredRecipes.length} of {recipes.length} recipes
           </span>
+          {filteredRecipes.length > 0 && (
+            <button onClick={exportFilteredRecipes} style={{ ...styles.button, background: 'linear-gradient(135deg, #10b981, #059669)', fontSize: '0.875rem', padding: '12px 20px' }}>
+              📥 Export Results
+            </button>
+          )}
         </div>
       </div>
 
-      <div style={{ ...styles.message, ...styles.messageInfo, marginBottom: '32px' }}>
-        📋 <strong>Click any recipe</strong> to view details, cost analysis, and ingredient breakdown. Use the edit button to modify recipes.
+      {/* ENHANCED SEARCH AND FILTER SECTION */}
+      <div style={{ ...styles.message, ...styles.messageInfo, marginBottom: '24px' }}>
+        🔍 <strong>Smart Recipe Search:</strong> Search by recipe name OR ingredient (try "vodka", "gin", "lime"). Filter by category or specific ingredients. Click any recipe to view full details and cost analysis.
       </div>
 
-      {recipes.length === 0 ? (
+      {/* Search Bar */}
+      <div style={{ position: 'relative', marginBottom: '24px' }}>
+        <span style={{
+          position: 'absolute',
+          left: '16px',
+          top: '50%',
+          transform: 'translateY(-50%)',
+          color: '#9ca3af',
+          fontSize: '1.2rem'
+        }}>
+          🔍
+        </span>
+        <input
+          type="text"
+          value={searchFilter}
+          onChange={(e) => setSearchFilter(e.target.value)}
+          placeholder="Search recipes or ingredients... (e.g., 'vodka', 'martini', 'gin')"
+          style={{
+            ...styles.input,
+            paddingLeft: '48px',
+            margin: 0,
+            fontSize: '1rem'
+          }}
+        />
+      </div>
+
+      {/* Filter Controls */}
+      <div style={{ ...styles.grid, ...styles.gridCols3, marginBottom: '24px' }}>
+        <div>
+          <label style={{ fontSize: '0.875rem', fontWeight: '600', color: '#374151', marginBottom: '8px', display: 'block' }}>
+            Recipe Category
+          </label>
+          <select
+            value={categoryFilter}
+            onChange={(e) => setCategoryFilter(e.target.value)}
+            style={{ ...styles.input, margin: 0 }}
+          >
+            {recipeCategories.map(cat => (
+              <option key={cat} value={cat}>
+                {cat} {cat !== 'All' && `(${recipes.filter(r => r.category === cat).length})`}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label style={{ fontSize: '0.875rem', fontWeight: '600', color: '#374151', marginBottom: '8px', display: 'block' }}>
+            Contains Ingredient
+          </label>
+          <select
+            value={ingredientFilter}
+            onChange={(e) => setIngredientFilter(e.target.value)}
+            style={{ ...styles.input, margin: 0 }}
+          >
+            {allRecipeIngredients.map(ingredient => (
+              <option key={ingredient} value={ingredient}>
+                {ingredient}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'end', gap: '8px' }}>
+          <button
+            onClick={clearFilters}
+            style={{
+              ...styles.buttonSecondary,
+              ...styles.button,
+              fontSize: '0.875rem',
+              padding: '12px 20px'
+            }}
+          >
+            🗑️ Clear Filters
+          </button>
+        </div>
+      </div>
+
+      {/* Active Filters Display */}
+      {(searchFilter || categoryFilter !== 'All' || ingredientFilter !== 'All') && (
+        <div style={{
+          background: 'rgba(59, 130, 246, 0.1)',
+          border: '1px solid rgba(59, 130, 246, 0.2)',
+          borderRadius: '12px',
+          padding: '16px',
+          marginBottom: '24px'
+        }}>
+          <div style={{ fontSize: '0.875rem', fontWeight: '600', color: '#1d4ed8', marginBottom: '8px' }}>
+            Active Filters:
+          </div>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            {searchFilter && (
+              <span style={{ ...styles.badge, background: '#3b82f6' }}>
+                Search: "{searchFilter}"
+              </span>
+            )}
+            {categoryFilter !== 'All' && (
+              <span style={{ ...styles.badge, background: '#8b5cf6' }}>
+                Category: {categoryFilter}
+              </span>
+            )}
+            {ingredientFilter !== 'All' && (
+              <span style={{ ...styles.badge, background: '#10b981' }}>
+                Ingredient: {ingredientFilter}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Results Section */}
+      {filteredRecipes.length === 0 && recipes.length > 0 ? (
+        <div style={{ textAlign: 'center', padding: '48px', color: '#6b7280' }}>
+          <div style={{ fontSize: '3rem', marginBottom: '16px' }}>🔍</div>
+          <h3>No recipes found</h3>
+          <p>Try adjusting your search terms or filters</p>
+          <button
+            onClick={clearFilters}
+            style={{
+              ...styles.button,
+              fontSize: '0.875rem',
+              padding: '12px 20px',
+              marginTop: '16px'
+            }}
+          >
+            Clear All Filters
+          </button>
+        </div>
+      ) : filteredRecipes.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '48px', color: '#6b7280' }}>
           <MartiniIcon size={48} />
           <h3 style={{ marginTop: '16px', marginBottom: '8px' }}>No recipes saved yet</h3>
@@ -1826,8 +2360,13 @@ function SavedRecipes({ recipes, ingredients, onRecipeEdit }) {
         </div>
       ) : (
         <div style={{ ...styles.grid, ...styles.gridCols2 }}>
-          {recipes.map(recipe => {
+          {filteredRecipes.map(recipe => {
             const cost = calculateRecipeCost(recipe);
+            const recipeIngredients = recipe.recipe_ingredients?.map(ri => {
+              const ingredient = ingredients.find(i => i.id === ri.ingredient_id);
+              return ingredient ? ingredient.name : '';
+            }).filter(name => name).join(', ') || 'No ingredients';
+
             return (
               <div
                 key={recipe.id}
@@ -1842,6 +2381,12 @@ function SavedRecipes({ recipes, ingredients, onRecipeEdit }) {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
                   <h3 style={{ margin: 0, fontSize: '1.125rem', fontWeight: 'bold', color: '#374151' }}>{recipe.name}</h3>
                   <span style={{ ...styles.badge, background: '#ec4899' }}>{recipe.category}</span>
+                </div>
+
+                {/* Recipe Ingredients Preview */}
+                <div style={{ fontSize: '0.875rem', color: '#6b7280', marginBottom: '12px', background: 'rgba(249, 250, 251, 0.5)', padding: '8px', borderRadius: '8px' }}>
+                  <div style={{ fontWeight: '600', marginBottom: '4px' }}>Ingredients:</div>
+                  <div style={{ fontSize: '0.75rem', lineHeight: '1.4' }}>{recipeIngredients}</div>
                 </div>
 
                 {cost && (
